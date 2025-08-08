@@ -399,7 +399,12 @@ export default function DocumentPage() {
               Usuário: <span style={{ color: userColor, fontWeight: 'bold' }}>{userName}</span>
             </p>
           </div>
-          <ProfileSelector onProfileSelect={handleProfileSelect} />
+          <ProfileSelector 
+            onProfileSelect={handleProfileSelect} 
+            documentId={docId}
+            userName={userName}
+            userColor={userColor}
+          />
         </div>
       </div>
     );

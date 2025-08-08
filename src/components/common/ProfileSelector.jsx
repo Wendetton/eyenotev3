@@ -1,15 +1,9 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
-
-export default function ProfileSelector() {
-  const router = useRouter();
-
+export default function ProfileSelector({ onProfileSelect, documentId, userName, userColor }) {
   const handleProfileSelection = (profile) => {
-    if (profile === 'doctor') {
-      router.push('/doctor');
-    } else if (profile === 'assistant') {
-      router.push('/assistant');
+    if (onProfileSelect) {
+      onProfileSelect(profile);
     }
   };
 
@@ -18,9 +12,16 @@ export default function ProfileSelector() {
       <header className="mb-8 text-center">
         <h1 className="text-4xl font-bold text-gray-800 mb-2">Eyenote</h1>
         <p className="text-lg text-gray-600">Sistema de Gestão Oftalmológica</p>
-        <p className="text-sm text-gray-500 mt-2">
-          Documento: aio3btq2v9c | Editando como: <span className="font-semibold text-blue-600">iPhone</span>
-        </p>
+        {documentId && (
+          <p className="text-sm text-gray-500 mt-2">
+            Documento: <span className="font-mono">{documentId}</span>
+            {userName && (
+              <>
+                {' | '}Usuário: <span className="font-semibold" style={{ color: userColor }}>{userName}</span>
+              </>
+            )}
+          </p>
+        )}
       </header>
       
       <div className="w-full max-w-2xl">
