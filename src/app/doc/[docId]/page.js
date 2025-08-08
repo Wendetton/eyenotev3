@@ -1,19 +1,20 @@
-
-// Este é o conteúdo completo do arquivo /home/ubuntu/collab-doc-editor/src/app/doc/[docId]/page.js
-// com as modificações na função handleCopy para formatação da tabela (Arial 10, alinhamentos, negrito, largura).
-
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { doc, onSnapshot, setDoc, updateDoc, collection, deleteDoc, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import ProfileSelector from '@/components/common/ProfileSelector';
+import PatientSelector from '@/components/doctor/PatientSelector';
+import PatientCreationForm from '@/components/assistant/PatientCreationForm';
+import ExamViewer from '@/components/doctor/ExamViewer';
+import { getPatients } from '@/utils/patientUtils';
 
 const getRandomColor = () => {
   const letters = '0123456789ABCDEF';
   let color = '#';
   for (let i = 0; i < 6; i++) {
-    color += letters[Math.floor(Math.random() * 10)]; // Use 16 for full hex range
+    color += letters[Math.floor(Math.random() * 10)];
   }
   return color;
 };
@@ -48,27 +49,19 @@ const generateOptions = (start, end, step, formatFixed = 2) => {
       const displayValue = (currentValue > 0 && formatFixed > 0 && value !== '0.00') ? `+${value}` : value;
       options.push({ value: value, label: displayValue });
     }
-  } else {
-    for (let i = scaledStart; i >= scaledEnd; i += scaledStep) {
-      const currentValue = i / scale;
-      const value = formatFixed > 0 ? currentValue.toFixed(formatFixed) : currentValue.toString();
-      const displayValue = (currentValue > 0 && formatFixed > 0 && value !== '0.00') ? `+${value}` : value;
-      options.push({ value: value, label: displayValue });
-    }
   }
   return options;
 };
 
-const esfOptions = generateOptions(-15.00, 15.00, 0.25);
-const cilOptions = generateOptions(0.00, -6.00, -0.25);
+const esfOptions = generateOptions(-30, 30, 0.25, 2);
+const cilOptions = generateOptions(-10, 0, 0.25, 2);
 const eixoOptions = generateOptions(0, 180, 5, 0);
-const additionOptions = generateOptions(0.75, 3.00, 0.25);
+const additionOptions = generateOptions(0.75, 4, 0.25, 2);
 
 const EyeForm = ({ eyeLabel, eyeData, eyeKey, onFieldChange, colorClass }) => {
-  if (!eyeData) return null;
   return (
     <div className={`bg-white p-6 rounded-lg shadow-lg border-t-4 ${colorClass}`}>
-      <h2 className={`text-xl font-semibold mb-4 text-gray-700 border-b pb-2`}>{eyeLabel}</h2>
+      <h2 className="text-xl font-semibold mb-4 text-gray-700">{eyeLabel}</h2>
       <div className="space-y-4">
         <div>
           <label htmlFor={`${eyeKey}-esf`} className="block text-sm font-medium text-gray-700 mb-1">Esférico (ESF)</label>
@@ -118,32 +111,49 @@ const EyeForm = ({ eyeLabel, eyeData, eyeKey, onFieldChange, colorClass }) => {
 };
 
 export default function DocumentPage() {
-  const params = useParams();
+  const { docId } = useParams();
   const router = useRouter();
-  const docId = params.docId;
   const [documentData, setDocumentData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [userName, setUserName] = useState('');
-  const [userId, setUserId] = useState('');
-  const [userColor, setUserColor] = useState('');
-  const [activeUsers, setActiveUsers] = useState([]);
   const [copyStatus, setCopyStatus] = useState('');
-
+  const [activeUsers, setActiveUsers] = useState([]);
+  const [userId] = useState(() => Math.random().toString(36).substring(2, 15));
+  const [userName, setUserName] = useState('');
+  const [userColor, setUserColor] = useState('');
+  const [userProfile, setUserProfile] = useState(null); // 'doctor' ou 'assistant'
+  const [selectedPatient, setSelectedPatient] = useState(null);
+  const [patients, setPatients] = useState([]);
+  const [showPatientForm, setShowPatientForm] = useState(false);
+  
   const presenceRef = useRef(null);
   const presenceIntervalRef = useRef(null);
-  const debounceTimeoutRef = useRef(null); 
+  const debounceTimeoutRef = useRef(null);
+
+  // Carregar pacientes do documento
+  useEffect(() => {
+    if (!docId) return;
+    
+    const loadPatients = async () => {
+      try {
+        const patientsList = await getPatients(docId);
+        setPatients(patientsList);
+      } catch (error) {
+        console.error('Erro ao carregar pacientes:', error);
+      }
+    };
+
+    loadPatients();
+    
+    // Recarregar pacientes a cada 30 segundos
+    const interval = setInterval(loadPatients, 30000);
+    return () => clearInterval(interval);
+  }, [docId]);
 
   useEffect(() => {
-    let localUserId = localStorage.getItem('collab_user_id');
     let localUserName = localStorage.getItem('collab_user_name');
     let localUserColor = localStorage.getItem('collab_user_color');
-    if (!localUserId) {
-      localUserId = Math.random().toString(36).substring(2, 15);
-      localStorage.setItem('collab_user_id', localUserId);
-    }
-    setUserId(localUserId);
     if (!localUserName) {
-      localUserName = prompt("Digite seu nome para colaborar:") || `Anônimo-${localUserId.substring(0, 4)}`;
+      localUserName = `Usuário ${Math.floor(Math.random() * 1000)}`;
       localStorage.setItem('collab_user_name', localUserName);
     }
     setUserName(localUserName);
@@ -195,55 +205,45 @@ export default function DocumentPage() {
       const q = query(usersCollectionRef, where('lastSeen', '<', sixtySecondsAgo));
       const inactiveSnapshot = await getDocs(q);
       inactiveSnapshot.forEach(async (userDoc) => {
-        await deleteDoc(doc(db, 'documents', docId, 'activeUsers', userDoc.id));
+        await deleteDoc(userDoc.ref);
       });
     };
+    const cleanupInterval = setInterval(cleanupInactiveUsers, 30000);
+
     const unsubscribeUsers = onSnapshot(usersCollectionRef, (snapshot) => {
-      const users = [];
-      const sixtySecondsAgo = new Date(Date.now() - 60000);
-      snapshot.forEach((userDoc) => {
-        const userData = userDoc.data();
-        if (userData.lastSeen && userData.lastSeen.toDate && userData.lastSeen.toDate() > sixtySecondsAgo) {
-          users.push({ id: userDoc.id, ...userData });
-        } else if (!userData.lastSeen) { users.push({ id: userDoc.id, ...userData }); }
-      });
+      const users = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setActiveUsers(users);
-      cleanupInactiveUsers();
     });
 
-    const handleBeforeUnload = async () => {
-      if (presenceRef.current) {
-        await deleteDoc(presenceRef.current).catch(e => console.error("Erro ao remover presença no unload: ", e));
-      }
-    };
-    window.addEventListener('beforeunload', handleBeforeUnload);
     return () => {
       unsubscribeDoc();
       unsubscribeUsers();
-      clearInterval(presenceIntervalRef.current);
-      if (debounceTimeoutRef.current) clearTimeout(debounceTimeoutRef.current);
-      handleBeforeUnload();
-      window.removeEventListener('beforeunload', handleBeforeUnload);
+      if (presenceIntervalRef.current) clearInterval(presenceIntervalRef.current);
+      clearInterval(cleanupInterval);
+      if (presenceRef.current) {
+        deleteDoc(presenceRef.current).catch(e => console.error("Erro ao limpar presença: ", e));
+      }
     };
   }, [docId, userId, userName, userColor]);
 
-  const updateDocInFirestore = async (dataToUpdate) => {
+  const updateDocInFirestore = async (updates) => {
     if (!docId) return;
     const docRef = doc(db, 'documents', docId);
-    try { await updateDoc(docRef, dataToUpdate); }
-    catch (error) { console.error(`Erro ao salvar documento:`, error); }
+    try { await updateDoc(docRef, updates); }
+    catch (error) { console.error("Erro ao atualizar documento:", error); }
   };
 
   const updateField = (path, value) => {
+    const keys = path.split('.');
     setDocumentData(prevData => {
-      const keys = path.split('.');
-      let tempData = JSON.parse(JSON.stringify(prevData));
-      let currentLevel = tempData;
-      keys.forEach((key, index) => {
-        if (index === keys.length - 1) { currentLevel[key] = value; }
-        else { if (!currentLevel[key] || typeof currentLevel[key] !== 'object') { currentLevel[key] = {}; } currentLevel = currentLevel[key]; }
-      });
-      return tempData;
+      const newData = { ...prevData };
+      let current = newData;
+      for (let i = 0; i < keys.length - 1; i++) {
+        current[keys[i]] = { ...current[keys[i]] };
+        current = current[keys[i]];
+      }
+      current[keys[keys.length - 1]] = value;
+      return newData;
     });
     if (path === 'annotations') { 
         if (debounceTimeoutRef.current) clearTimeout(debounceTimeoutRef.current);
@@ -295,55 +295,19 @@ export default function DocumentPage() {
       [addition.active ? 'Para perto' : '', addition.active ? `Adição ${additionValueText} (AO)` : '', '', '']
     ];
 
-    // Estilos CSS para a tabela copiada
-    const tableStyle = 'border-collapse: collapse; width: auto; font-family: Tahoma, Arial, sans-serif; font-size: 10pt;';
-    const thStyleBase = 'border: 1px solid #dddddd; padding: 4px; background-color: #f2f2f2;';
-    const tdStyleBase = 'border: 1px solid #dddddd; padding: 4px;'
-    
-    const thStyles = {
-        default: `${thStyleBase} text-align: left; width: 120px;`, // Coluna A - mais larga
-        center: `${thStyleBase} text-align: center; width: 80px;`  // Colunas B, C, D - mais estreitas
-};
-
-    const tdStyles = {
-        default: `${tdStyleBase} text-align: left; width: 120px;`,
-        centerBold: `${tdStyleBase} text-align: center; font-weight: bold; width: 80px;`,
-        right: `${tdStyleBase} text-align: right; width: 120px;`
-};  
-
-    let htmlTable = `<table style="${tableStyle}">`;
-    htmlTable += `<thead><tr>`;
-    // Célula A1 (vazia)
-    htmlTable += `<th style="${thStyles.default}">${tableRows[0][0]}</th>`; 
-    // Células B1, C1, D1 (cabeçalhos de valores) - centralizadas
-    htmlTable += `<th style="${thStyles.center}">${tableRows[0][1]}</th>`; 
-    htmlTable += `<th style="${thStyles.center}">${tableRows[0][2]}</th>`; 
-    htmlTable += `<th style="${thStyles.center}">${tableRows[0][3]}</th>`; 
-    htmlTable += `</tr></thead><tbody>`;
-    
-    // Linha Olho Direito
-    htmlTable += `<tr>`;
-    htmlTable += `<td style="${tdStyles.default}">${tableRows[1][0]}</td>`; // A2
-    htmlTable += `<td style="${tdStyles.centerBold}">${tableRows[1][1]}</td>`; // B2
-    htmlTable += `<td style="${tdStyles.centerBold}">${tableRows[1][2]}</td>`; // C2
-    htmlTable += `<td style="${tdStyles.centerBold}">${tableRows[1][3]}</td>`; // D2
-    htmlTable += `</tr>`;
-
-    // Linha Olho Esquerdo
-    htmlTable += `<tr>`;
-    htmlTable += `<td style="${tdStyles.default}">${tableRows[2][0]}</td>`; // A3
-    htmlTable += `<td style="${tdStyles.centerBold}">${tableRows[2][1]}</td>`; // B3
-    htmlTable += `<td style="${tdStyles.centerBold}">${tableRows[2][2]}</td>`; // C3
-    htmlTable += `<td style="${tdStyles.centerBold}">${tableRows[2][3]}</td>`; // D3
-    htmlTable += `</tr>`;
-
-    // Linha Adição
-    htmlTable += `<tr>`;
-    htmlTable += `<td style="${tdStyles.right}">${tableRows[3][0]}</td>`; // A4 - alinhado à direita
-    htmlTable += `<td style="${tdStyles.default}" colspan="3">${tableRows[3][1]}</td>`; // B4 (colspan para ocupar o resto)
-    // As células C4 e D4 são implicitamente cobertas pelo colspan, então não as adicionamos
-    htmlTable += `</tr>`;
-
+    let htmlTable = '<table style="border-collapse: collapse; font-family: Arial, sans-serif; font-size: 10pt;"><tbody>';
+    tableRows.forEach((row, rowIndex) => {
+      htmlTable += '<tr>';
+      row.forEach((cell, cellIndex) => {
+        const isHeader = rowIndex === 0;
+        const cellWidth = cellIndex === 0 ? '120px' : '80px';
+        const cellAlign = cellIndex === 0 ? 'left' : 'center';
+        const cellStyle = `border: 1px solid black; padding: 4px; width: ${cellWidth}; text-align: ${cellAlign}; ${isHeader ? 'font-weight: bold; background-color: #f0f0f0;' : ''}`;
+        const tag = isHeader ? 'th' : 'td';
+        htmlTable += `<${tag} style="${cellStyle}">${cell}</${tag}>`;
+      });
+      htmlTable += '</tr>';
+    });
     htmlTable += '</tbody></table>';
 
     const tsvData = tableRows.map(row => row.join('\t')).join('\n');
@@ -367,101 +331,374 @@ export default function DocumentPage() {
     setTimeout(() => setCopyStatus(''), 3000);
   };
 
-  const handleBackToDoctor = () => {
-    router.push('/doctor');
+  const handleProfileSelect = (profile) => {
+    setUserProfile(profile);
+  };
+
+  const handlePatientSelect = (patient) => {
+    setSelectedPatient(patient);
+  };
+
+  const handleBackToPatients = () => {
+    setSelectedPatient(null);
+  };
+
+  const handleBackToProfile = () => {
+    setUserProfile(null);
+    setSelectedPatient(null);
+    setShowPatientForm(false);
+  };
+
+  const handlePatientCreated = async () => {
+    setShowPatientForm(false);
+    // Recarregar lista de pacientes
+    try {
+      const patientsList = await getPatients(docId);
+      setPatients(patientsList);
+    } catch (error) {
+      console.error('Erro ao recarregar pacientes:', error);
+    }
   };
 
   if (loading || !documentData) {
-    return <div className="flex justify-center items-center h-screen"><p>Carregando documento...</p></div>;
-  }
-  if (!docId) {
-    return <div className="flex justify-center items-center h-screen"><p>ID do documento não fornecido.</p></div>;
+    return (
+      <div className="flex justify-center items-center h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Carregando documento...</p>
+        </div>
+      </div>
+    );
   }
 
-  return (
-    <div className="container mx-auto p-4 flex flex-col min-h-screen bg-gray-100">
-      <header className="mb-6 py-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <button
-              onClick={handleBackToDoctor}
-              className="text-gray-500 hover:text-gray-700 transition-colors"
-              title="Voltar para lista de pacientes"
-            >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-              </svg>
-            </button>
-            <div>
-              <h1 className="text-3xl font-bold text-center text-gray-800">EyeNote</h1> 
-              <p className="text-sm text-gray-600 text-center">Documento: {docId} | Editando como: <span style={{ color: userColor, fontWeight: 'bold' }}>{userName}</span></p>
+  if (!docId) {
+    return (
+      <div className="flex justify-center items-center h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+        <div className="text-center">
+          <p className="text-red-600 text-lg">ID do documento não fornecido.</p>
+          <button 
+            onClick={() => router.push('/')}
+            className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+          >
+            Voltar ao Início
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Se não selecionou perfil ainda
+  if (!userProfile) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+        <div className="container mx-auto p-4">
+          <div className="text-center mb-8 pt-8">
+            <h1 className="text-4xl font-bold mb-2 text-gray-800">Eyenote</h1>
+            <p className="text-gray-600">Documento: {docId}</p>
+            <p className="text-sm text-gray-500 mt-2">
+              Usuário: <span style={{ color: userColor, fontWeight: 'bold' }}>{userName}</span>
+            </p>
+          </div>
+          <ProfileSelector onProfileSelect={handleProfileSelect} />
+        </div>
+      </div>
+    );
+  }
+
+  // Interface do Assistente
+  if (userProfile === 'assistant') {
+    if (showPatientForm) {
+      return (
+        <div className="min-h-screen bg-gradient-to-br from-green-50 to-emerald-100">
+          <div className="container mx-auto p-4">
+            <div className="flex items-center justify-between mb-6">
+              <button
+                onClick={() => setShowPatientForm(false)}
+                className="flex items-center text-gray-600 hover:text-gray-800"
+              >
+                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                </svg>
+                Voltar
+              </button>
+              <div className="text-center">
+                <h1 className="text-2xl font-bold text-gray-800">Criar Paciente</h1>
+                <p className="text-sm text-gray-600">Documento: {docId}</p>
+              </div>
+              <div></div>
             </div>
+            <PatientCreationForm 
+              documentId={docId} 
+              onPatientCreated={handlePatientCreated}
+            />
           </div>
         </div>
-      </header>
-      <div className="flex flex-grow flex-col lg:flex-row gap-6">
-        <main className="flex-grow lg:w-3/4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <EyeForm eyeLabel="Olho Direito (OD)" eyeData={documentData.rightEye} eyeKey="rightEye" onFieldChange={updateField} colorClass="border-blue-500"/>
-            <EyeForm eyeLabel="Olho Esquerdo (OE)" eyeData={documentData.leftEye} eyeKey="leftEye" onFieldChange={updateField} colorClass="border-green-500"/>
-          </div>
-          <div className="mt-6 bg-white p-6 rounded-lg shadow-lg border-t-4 border-purple-500">
-            <h2 className="text-xl font-semibold mb-4 text-gray-700">Adição</h2>
-            <div className="flex items-center mb-4">
-              <label htmlFor="addition-toggle" className="flex items-center cursor-pointer">
-                <div className="relative">
-                  <input type="checkbox" id="addition-toggle" className="sr-only" checked={documentData.addition?.active || false} onChange={handleAdditionToggle}/>
-                  <div className={`block w-14 h-8 rounded-full ${documentData.addition?.active ? 'bg-purple-600' : 'bg-gray-300'}`}></div>
-                  <div className={`dot absolute left-1 top-1 bg-white w-6 h-6 rounded-full transition-transform ${documentData.addition?.active ? 'translate-x-6' : ''}`}></div>
-                </div>
-                <div className="ml-3 text-gray-700 font-medium">Ativar Adição</div>
-              </label>
+      );
+    }
+
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-green-50 to-emerald-100">
+        <div className="container mx-auto p-4">
+          <div className="flex items-center justify-between mb-6">
+            <button
+              onClick={handleBackToProfile}
+              className="flex items-center text-gray-600 hover:text-gray-800"
+            >
+              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+              </svg>
+              Trocar Perfil
+            </button>
+            <div className="text-center">
+              <h1 className="text-3xl font-bold text-gray-800">Assistente</h1>
+              <p className="text-gray-600">Documento: {docId}</p>
+              <p className="text-sm text-gray-500">
+                Usuário: <span style={{ color: userColor, fontWeight: 'bold' }}>{userName}</span>
+              </p>
             </div>
-            {documentData.addition?.active && (
-              <div>
-                <label htmlFor="addition-value" className="block text-sm font-medium text-gray-700 mb-1">Valor da Adição</label>
-                <select id="addition-value" name="additionValue" value={documentData.addition.value} onChange={(e) => updateField('addition.value', e.target.value)} className="mt-1 block w-full md:w-1/2 pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md shadow-sm text-black">
-                  {additionOptions.map(option => (<option key={`addition-${option.value}`} value={option.value}>{option.label}</option>))}
-                </select>
+            <button
+              onClick={() => setShowPatientForm(true)}
+              className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md font-medium"
+            >
+              Criar Paciente
+            </button>
+          </div>
+          
+          <div className="bg-white rounded-lg shadow-lg p-6">
+            <h2 className="text-xl font-semibold mb-4 text-gray-800">Pacientes Ativos</h2>
+            {patients.length === 0 ? (
+              <div className="text-center py-8">
+                <p className="text-gray-500 mb-4">Nenhum paciente criado ainda</p>
+                <button
+                  onClick={() => setShowPatientForm(true)}
+                  className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-md font-medium"
+                >
+                  Criar Primeiro Paciente
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {patients.map((patient) => (
+                  <div key={patient.id} className="border rounded-lg p-4 hover:shadow-md transition-shadow">
+                    <h3 className="font-semibold text-gray-800 mb-2">{patient.name}</h3>
+                    <div className="flex space-x-2 text-sm">
+                      <span className={`px-2 py-1 rounded ${patient.exams?.ar?.uploaded ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                        AR: {patient.exams?.ar?.uploaded ? '✓' : '✗'}
+                      </span>
+                      <span className={`px-2 py-1 rounded ${patient.exams?.tonometry?.uploaded ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                        Tono: {patient.exams?.tonometry?.uploaded ? '✓' : '✗'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-2">
+                      Criado há {Math.floor((Date.now() - patient.createdAt?.toDate?.()?.getTime?.() || 0) / (1000 * 60))} min
+                    </p>
+                  </div>
+                ))}
               </div>
             )}
           </div>
-          <div className="mt-6 bg-white p-6 rounded-lg shadow-lg border-t-4 border-gray-500">
-            <h2 className="text-xl font-semibold mb-4 text-gray-700">Controles</h2>
-            <div className="flex flex-wrap gap-4">
-                <button onClick={handleReset} className="px-6 py-2 bg-red-500 hover:bg-red-600 text-white font-semibold rounded-md shadow-sm transition duration-150 ease-in-out focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-opacity-50">Resetar Valores</button>
-                <button onClick={handleCopy} className="px-6 py-2 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded-md shadow-sm transition duration-150 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50">{copyStatus || 'Copiar para Tabela'}</button>
-            </div>
-            {copyStatus && <p className="text-sm text-gray-600 mt-2">{copyStatus === 'Copiado!' ? 'Dados copiados para a área de transferência.' : (copyStatus === 'Copiado como texto simples!' ? 'Dados copiados como texto simples.' : 'Não foi possível copiar.')}</p>}
-          </div>
-        </main>
-        <aside className="w-full lg:w-1/4 bg-white p-4 rounded-lg shadow-md lg:sticky lg:top-6 self-start space-y-6">
-          <div>
-            <h2 className="text-lg font-semibold mb-3 text-gray-700 border-b pb-2">Usuários Ativos ({activeUsers.length})</h2>
-            <ul className="max-h-60 overflow-y-auto space-y-2">
+
+          {/* Usuários Ativos */}
+          <div className="mt-6 bg-white rounded-lg shadow-lg p-6">
+            <h2 className="text-lg font-semibold mb-3 text-gray-700">Usuários Ativos ({activeUsers.length})</h2>
+            <div className="flex flex-wrap gap-2">
               {activeUsers.map(user => (
-                <li key={user.id} className="flex items-center p-2 rounded-md hover:bg-gray-100 transition-colors duration-150" style={{ backgroundColor: user.color ? `${user.color}1A` : '#E5E7EB66' }}>
-                  <span style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: user.color || 'gray', marginRight: '10px', display: 'inline-block', flexShrink: 0 }}></span>
-                  <span className="text-sm font-medium" style={{ color: user.color || 'black' }}>{user.name}</span>
-                </li>
+                <div key={user.id} className="flex items-center bg-gray-100 rounded-full px-3 py-1">
+                  <span 
+                    className="w-3 h-3 rounded-full mr-2" 
+                    style={{ backgroundColor: user.color || 'gray' }}
+                  ></span>
+                  <span className="text-sm font-medium" style={{ color: user.color || 'black' }}>
+                    {user.name}
+                  </span>
+                </div>
               ))}
-            </ul>
+            </div>
           </div>
-          <div>
-            <h2 className="text-lg font-semibold mb-3 text-gray-700 border-b pb-2">Anotações</h2>
-            <textarea
-              value={documentData.annotations || ''}
-              onChange={(e) => updateField('annotations', e.target.value)}
-              placeholder="Digite suas anotações aqui..."
-              className="w-full h-40 p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-sm text-black"
+        </div>
+      </div>
+    );
+  }
+
+  // Interface do Médico
+  if (userProfile === 'doctor') {
+    if (!selectedPatient) {
+      return (
+        <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+          <div className="container mx-auto p-4">
+            <div className="flex items-center justify-between mb-6">
+              <button
+                onClick={handleBackToProfile}
+                className="flex items-center text-gray-600 hover:text-gray-800"
+              >
+                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                </svg>
+                Trocar Perfil
+              </button>
+              <div className="text-center">
+                <h1 className="text-3xl font-bold text-gray-800">Médico</h1>
+                <p className="text-gray-600">Documento: {docId}</p>
+                <p className="text-sm text-gray-500">
+                  Usuário: <span style={{ color: userColor, fontWeight: 'bold' }}>{userName}</span>
+                </p>
+              </div>
+              <div></div>
+            </div>
+            <PatientSelector 
+              patients={patients} 
+              onPatientSelect={handlePatientSelect}
+              documentId={docId}
             />
           </div>
-        </aside>
+        </div>
+      );
+    }
+
+    // Interface integrada: Receita + Exames
+    return (
+      <div className="container mx-auto p-4 flex flex-col min-h-screen bg-gray-100">
+        <header className="mb-6 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <button
+                onClick={handleBackToPatients}
+                className="text-gray-500 hover:text-gray-700 transition-colors"
+                title="Voltar para lista de pacientes"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                </svg>
+              </button>
+              <div>
+                <h1 className="text-3xl font-bold text-gray-800">EyeNote</h1>
+                <p className="text-sm text-gray-600">
+                  Paciente: <span className="font-semibold">{selectedPatient.name}</span> | 
+                  Documento: {docId} | 
+                  Editando como: <span style={{ color: userColor, fontWeight: 'bold' }}>{userName}</span>
+                </p>
+              </div>
+            </div>
+          </div>
+        </header>
+
+        <div className="flex flex-grow flex-col lg:flex-row gap-6">
+          <main className="flex-grow lg:w-3/4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <EyeForm 
+                eyeLabel="Olho Direito (OD)" 
+                eyeData={documentData.rightEye} 
+                eyeKey="rightEye" 
+                onFieldChange={updateField} 
+                colorClass="border-blue-500"
+              />
+              <EyeForm 
+                eyeLabel="Olho Esquerdo (OE)" 
+                eyeData={documentData.leftEye} 
+                eyeKey="leftEye" 
+                onFieldChange={updateField} 
+                colorClass="border-green-500"
+              />
+            </div>
+            
+            <div className="mt-6 bg-white p-6 rounded-lg shadow-lg border-t-4 border-purple-500">
+              <h2 className="text-xl font-semibold mb-4 text-gray-700">Adição</h2>
+              <div className="flex items-center mb-4">
+                <label htmlFor="addition-toggle" className="flex items-center cursor-pointer">
+                  <div className="relative">
+                    <input 
+                      type="checkbox" 
+                      id="addition-toggle" 
+                      className="sr-only" 
+                      checked={documentData.addition?.active || false} 
+                      onChange={handleAdditionToggle}
+                    />
+                    <div className={`block w-14 h-8 rounded-full ${documentData.addition?.active ? 'bg-purple-600' : 'bg-gray-300'}`}></div>
+                    <div className={`dot absolute left-1 top-1 bg-white w-6 h-6 rounded-full transition-transform ${documentData.addition?.active ? 'translate-x-6' : ''}`}></div>
+                  </div>
+                  <div className="ml-3 text-gray-700 font-medium">Ativar Adição</div>
+                </label>
+              </div>
+              {documentData.addition?.active && (
+                <div>
+                  <label htmlFor="addition-value" className="block text-sm font-medium text-gray-700 mb-1">Valor da Adição</label>
+                  <select 
+                    id="addition-value" 
+                    name="additionValue" 
+                    value={documentData.addition.value} 
+                    onChange={(e) => updateField('addition.value', e.target.value)} 
+                    className="mt-1 block w-full md:w-1/2 pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md shadow-sm text-black"
+                  >
+                    {additionOptions.map(option => (
+                      <option key={`addition-${option.value}`} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
+            
+            <div className="mt-6 bg-white p-6 rounded-lg shadow-lg border-t-4 border-gray-500">
+              <h2 className="text-xl font-semibold mb-4 text-gray-700">Controles</h2>
+              <div className="flex flex-wrap gap-4">
+                <button 
+                  onClick={handleReset} 
+                  className="px-6 py-2 bg-red-500 hover:bg-red-600 text-white font-semibold rounded-md shadow-sm transition duration-150 ease-in-out focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-opacity-50"
+                >
+                  Resetar Valores
+                </button>
+                <button 
+                  onClick={handleCopy} 
+                  className="px-6 py-2 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded-md shadow-sm transition duration-150 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
+                >
+                  {copyStatus || 'Copiar para Tabela'}
+                </button>
+              </div>
+              {copyStatus && (
+                <p className="text-sm text-gray-600 mt-2">
+                  {copyStatus === 'Copiado!' ? 'Dados copiados para a área de transferência.' : 
+                   (copyStatus === 'Copiado como texto simples!' ? 'Dados copiados como texto simples.' : 'Não foi possível copiar.')}
+                </p>
+              )}
+            </div>
+          </main>
+          
+          <aside className="w-full lg:w-1/4 bg-white p-4 rounded-lg shadow-md lg:sticky lg:top-6 self-start space-y-6">
+            {/* Visualizador de Exames */}
+            <ExamViewer patient={selectedPatient} />
+            
+            {/* Usuários Ativos */}
+            <div>
+              <h2 className="text-lg font-semibold mb-3 text-gray-700 border-b pb-2">Usuários Ativos ({activeUsers.length})</h2>
+              <ul className="max-h-60 overflow-y-auto space-y-2">
+                {activeUsers.map(user => (
+                  <li key={user.id} className="flex items-center p-2 rounded-md hover:bg-gray-100 transition-colors duration-150" style={{ backgroundColor: user.color ? `${user.color}1A` : '#E5E7EB66' }}>
+                    <span style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: user.color || 'gray', marginRight: '10px', display: 'inline-block', flexShrink: 0 }}></span>
+                    <span className="text-sm font-medium" style={{ color: user.color || 'black' }}>{user.name}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            
+            {/* Anotações */}
+            <div>
+              <h2 className="text-lg font-semibold mb-3 text-gray-700 border-b pb-2">Anotações</h2>
+              <textarea
+                value={documentData.annotations || ''}
+                onChange={(e) => updateField('annotations', e.target.value)}
+                placeholder="Digite suas anotações aqui..."
+                className="w-full h-40 p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-sm text-black"
+              />
+            </div>
+          </aside>
+        </div>
+        
+        <footer className="mt-8 text-center text-sm text-gray-500 py-4 border-t border-gray-200">
+          As alterações são salvas automaticamente.
+        </footer>
       </div>
-      <footer className="mt-8 text-center text-sm text-gray-500 py-4 border-t border-gray-200">
-        As alterações são salvas automaticamente.
-      </footer>
-    </div>
-  );
+    );
+  }
+
+  return null;
 }
 

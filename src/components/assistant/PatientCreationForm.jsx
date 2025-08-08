@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { createPatient } from '@/utils/patientUtils';
 import { useImageUpload } from '@/hooks/useImageUpload';
 
-export default function PatientCreationForm({ onPatientCreated, onCancel }) {
+export default function PatientCreationForm({ documentId, onPatientCreated, onCancel }) {
   const [patientName, setPatientName] = useState('');
   const [arFile, setArFile] = useState(null);
   const [tonometryFile, setTonometryFile] = useState(null);
@@ -33,8 +33,8 @@ export default function PatientCreationForm({ onPatientCreated, onCancel }) {
       setIsCreating(true);
       setError('');
 
-      // Criar paciente no Firestore
-      const newPatient = await createPatient({
+      // Criar paciente no Firestore vinculado ao documento
+      const newPatient = await createPatient(documentId, {
         name: patientName.trim()
       });
 

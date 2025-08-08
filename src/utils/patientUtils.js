@@ -20,11 +20,12 @@ export const generatePatientId = () => {
 };
 
 // Criar novo paciente
-export const createPatient = async (patientData) => {
+export const createPatient = async (documentId, patientData) => {
   try {
     const patientsRef = collection(db, 'patients');
     const newPatient = {
       name: patientData.name,
+      documentId, // Vincular ao documento
       status: 'active',
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
@@ -52,7 +53,31 @@ export const createPatient = async (patientData) => {
   }
 };
 
-// Buscar todos os pacientes ativos
+// Buscar pacientes de um documento específico
+export const getPatients = async (documentId, status = 'active') => {
+  try {
+    const patientsRef = collection(db, 'patients');
+    const q = query(
+      patientsRef, 
+      where('documentId', '==', documentId),
+      where('status', '==', status),
+      orderBy('createdAt', 'desc')
+    );
+    const querySnapshot = await getDocs(q);
+    
+    const patients = [];
+    querySnapshot.forEach((doc) => {
+      patients.push({ id: doc.id, ...doc.data() });
+    });
+    
+    return patients;
+  } catch (error) {
+    console.error('Erro ao buscar pacientes do documento:', error);
+    throw error;
+  }
+};
+
+// Buscar todos os pacientes ativos (mantido para compatibilidade)
 export const getActivePatients = async () => {
   try {
     const patientsRef = collection(db, 'patients');
