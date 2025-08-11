@@ -8,7 +8,7 @@ import ProfileSelector from '@/components/common/ProfileSelector';
 import PatientSelector from '@/components/doctor/PatientSelector';
 import PatientCreationForm from '@/components/assistant/PatientCreationForm';
 import ExamViewer from '@/components/doctor/ExamViewer';
-import { getPatients } from '@/utils/patientUtils';
+import { getPatients, subscribeToDocumentPatients } from '@/utils/patientUtils';
 
 const getRandomColor = () => {
   const letters = '0123456789ABCDEF';
@@ -129,24 +129,18 @@ export default function DocumentPage() {
   const presenceIntervalRef = useRef(null);
   const debounceTimeoutRef = useRef(null);
 
-  // Carregar pacientes do documento
+  // Carregar pacientes do documento com listener em tempo real
   useEffect(() => {
     if (!docId) return;
     
-    const loadPatients = async () => {
-      try {
-        const patientsList = await getPatients(docId);
-        setPatients(patientsList);
-      } catch (error) {
-        console.error('Erro ao carregar pacientes:', error);
-      }
-    };
+    // Usar listener em tempo real para sincronização automática
+    const unsubscribe = subscribeToDocumentPatients(docId, (patientsList) => {
+      setPatients(patientsList);
+    });
 
-    loadPatients();
-    
-    // Recarregar pacientes a cada 30 segundos
-    const interval = setInterval(loadPatients, 30000);
-    return () => clearInterval(interval);
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
   }, [docId]);
 
   useEffect(() => {
@@ -349,15 +343,9 @@ export default function DocumentPage() {
     setShowPatientForm(false);
   };
 
-  const handlePatientCreated = async () => {
+  const handlePatientCreated = () => {
     setShowPatientForm(false);
-    // Recarregar lista de pacientes
-    try {
-      const patientsList = await getPatients(docId);
-      setPatients(patientsList);
-    } catch (error) {
-      console.error('Erro ao recarregar pacientes:', error);
-    }
+    // Não precisa recarregar - o listener em tempo real já atualiza automaticamente
   };
 
   if (loading || !documentData) {

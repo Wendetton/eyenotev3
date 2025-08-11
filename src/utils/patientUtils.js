@@ -53,21 +53,28 @@ export const createPatient = async (documentId, patientData) => {
   }
 };
 
-// Buscar pacientes de um documento específico
+// Buscar pacientes de um documento específico (SEM orderBy para evitar erro de índice)
 export const getPatients = async (documentId, status = 'active') => {
   try {
     const patientsRef = collection(db, 'patients');
     const q = query(
       patientsRef, 
       where('documentId', '==', documentId),
-      where('status', '==', status),
-      orderBy('createdAt', 'desc')
+      where('status', '==', status)
+      // REMOVIDO: orderBy('createdAt', 'desc') - causa erro de índice
     );
     const querySnapshot = await getDocs(q);
     
     const patients = [];
     querySnapshot.forEach((doc) => {
       patients.push({ id: doc.id, ...doc.data() });
+    });
+    
+    // Ordenar no cliente para evitar erro de índice
+    patients.sort((a, b) => {
+      const timeA = a.createdAt?.toDate?.() || new Date(0);
+      const timeB = b.createdAt?.toDate?.() || new Date(0);
+      return timeB - timeA; // Mais recente primeiro
     });
     
     return patients;
@@ -77,20 +84,27 @@ export const getPatients = async (documentId, status = 'active') => {
   }
 };
 
-// Buscar todos os pacientes ativos (mantido para compatibilidade)
+// Buscar todos os pacientes ativos (SEM orderBy)
 export const getActivePatients = async () => {
   try {
     const patientsRef = collection(db, 'patients');
     const q = query(
       patientsRef, 
-      where('status', '==', 'active'),
-      orderBy('createdAt', 'desc')
+      where('status', '==', 'active')
+      // REMOVIDO: orderBy('createdAt', 'desc')
     );
     const querySnapshot = await getDocs(q);
     
     const patients = [];
     querySnapshot.forEach((doc) => {
       patients.push({ id: doc.id, ...doc.data() });
+    });
+    
+    // Ordenar no cliente
+    patients.sort((a, b) => {
+      const timeA = a.createdAt?.toDate?.() || new Date(0);
+      const timeB = b.createdAt?.toDate?.() || new Date(0);
+      return timeB - timeA;
     });
     
     return patients;
@@ -100,20 +114,27 @@ export const getActivePatients = async () => {
   }
 };
 
-// Buscar pacientes arquivados
+// Buscar pacientes arquivados (SEM orderBy)
 export const getArchivedPatients = async () => {
   try {
     const patientsRef = collection(db, 'patients');
     const q = query(
       patientsRef, 
-      where('status', '==', 'archived'),
-      orderBy('updatedAt', 'desc')
+      where('status', '==', 'archived')
+      // REMOVIDO: orderBy('updatedAt', 'desc')
     );
     const querySnapshot = await getDocs(q);
     
     const patients = [];
     querySnapshot.forEach((doc) => {
       patients.push({ id: doc.id, ...doc.data() });
+    });
+    
+    // Ordenar no cliente
+    patients.sort((a, b) => {
+      const timeA = a.updatedAt?.toDate?.() || new Date(0);
+      const timeB = b.updatedAt?.toDate?.() || new Date(0);
+      return timeB - timeA;
     });
     
     return patients;
@@ -199,13 +220,14 @@ export const deletePatient = async (patientId) => {
   }
 };
 
-// Listener em tempo real para pacientes ativos
-export const subscribeToActivePatients = (callback) => {
+// Listener em tempo real para pacientes de um documento específico (SEM orderBy)
+export const subscribeToDocumentPatients = (documentId, callback) => {
   const patientsRef = collection(db, 'patients');
   const q = query(
     patientsRef, 
-    where('status', '==', 'active'),
-    orderBy('createdAt', 'desc')
+    where('documentId', '==', documentId),
+    where('status', '==', 'active')
+    // REMOVIDO: orderBy('createdAt', 'desc')
   );
   
   return onSnapshot(q, (querySnapshot) => {
@@ -213,6 +235,40 @@ export const subscribeToActivePatients = (callback) => {
     querySnapshot.forEach((doc) => {
       patients.push({ id: doc.id, ...doc.data() });
     });
+    
+    // Ordenar no cliente
+    patients.sort((a, b) => {
+      const timeA = a.createdAt?.toDate?.() || new Date(0);
+      const timeB = b.createdAt?.toDate?.() || new Date(0);
+      return timeB - timeA;
+    });
+    
+    callback(patients);
+  });
+};
+
+// Listener em tempo real para pacientes ativos (SEM orderBy)
+export const subscribeToActivePatients = (callback) => {
+  const patientsRef = collection(db, 'patients');
+  const q = query(
+    patientsRef, 
+    where('status', '==', 'active')
+    // REMOVIDO: orderBy('createdAt', 'desc')
+  );
+  
+  return onSnapshot(q, (querySnapshot) => {
+    const patients = [];
+    querySnapshot.forEach((doc) => {
+      patients.push({ id: doc.id, ...doc.data() });
+    });
+    
+    // Ordenar no cliente
+    patients.sort((a, b) => {
+      const timeA = a.createdAt?.toDate?.() || new Date(0);
+      const timeB = b.createdAt?.toDate?.() || new Date(0);
+      return timeB - timeA;
+    });
+    
     callback(patients);
   });
 };
