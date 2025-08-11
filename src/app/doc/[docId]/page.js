@@ -2,13 +2,13 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { doc, onSnapshot, setDoc, updateDoc, collection, deleteDoc, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
+import { doc, onSnapshot, setDoc, updateDoc, getDoc, collection, deleteDoc, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import ProfileSelector from '@/components/common/ProfileSelector';
 import PatientSelector from '@/components/doctor/PatientSelector';
 import PatientCreationForm from '@/components/assistant/PatientCreationForm';
 import ExamViewer from '@/components/doctor/ExamViewer';
-import { getPatients, subscribeToDocumentPatients, archivePatient } from '@/utils/patientUtils';
+import { getPatients, subscribeToDocumentPatients, archivePatient, createPatient } from '@/utils/patientUtils';
 import PatientCard from '@/components/patient/PatientCard';
 import ArchivedPatients from '@/components/common/ArchivedPatients';
 
@@ -237,9 +237,31 @@ export default function DocumentPage() {
 
   const updateDocInFirestore = async (updates) => {
     if (!docId) return;
-    const docRef = doc(db, 'documents', docId);
-    try { await updateDoc(docRef, updates); }
-    catch (error) { console.error("Erro ao atualizar documento:", error); }
+    
+    // Se há paciente selecionado, salvar dados específicos do paciente
+    if (selectedPatient && (updates.rightEye || updates.leftEye || updates.addition || updates.annotations)) {
+      const patientDocRef = doc(db, 'documents', docId, 'patients', selectedPatient.id);
+      try { 
+        await updateDoc(patientDocRef, updates); 
+      } catch (error) { 
+        // Se documento do paciente não existe, criar
+        try {
+          await setDoc(patientDocRef, {
+            patientId: selectedPatient.id,
+            patientName: selectedPatient.name,
+            createdAt: serverTimestamp(),
+            ...updates
+          });
+        } catch (createError) {
+          console.error("Erro ao criar documento do paciente:", createError);
+        }
+      }
+    } else {
+      // Para dados globais do documento (seleção de paciente, etc.)
+      const docRef = doc(db, 'documents', docId);
+      try { await updateDoc(docRef, updates); }
+      catch (error) { console.error("Erro ao atualizar documento:", error); }
+    }
   };
 
   const updateField = (path, value) => {
@@ -347,9 +369,27 @@ export default function DocumentPage() {
   const handlePatientSelect = async (patient) => {
     setSelectedPatient(patient);
     
-    // Sincronizar seleção de paciente no documento para outros usuários
+    // Carregar dados específicos do paciente
     if (patient) {
       try {
+        const patientDocRef = doc(db, 'documents', docId, 'patients', patient.id);
+        const patientDoc = await getDoc(patientDocRef);
+        
+        if (patientDoc.exists()) {
+          const patientData = patientDoc.data();
+          // Carregar dados específicos do paciente
+          setDocumentData({
+            rightEye: patientData.rightEye || initialDocumentData.rightEye,
+            leftEye: patientData.leftEye || initialDocumentData.leftEye,
+            addition: patientData.addition || initialDocumentData.addition,
+            annotations: patientData.annotations || initialDocumentData.annotations
+          });
+        } else {
+          // Se não há dados salvos, usar dados iniciais
+          setDocumentData(initialDocumentData);
+        }
+        
+        // Sincronizar seleção de paciente no documento para outros usuários
         await updateDocInFirestore({
           selectedPatientId: patient.id,
           selectedPatientName: patient.name,
@@ -357,7 +397,9 @@ export default function DocumentPage() {
           selectedAt: serverTimestamp()
         });
       } catch (error) {
-        console.error('Erro ao sincronizar seleção de paciente:', error);
+        console.error('Erro ao carregar dados do paciente:', error);
+        // Em caso de erro, usar dados iniciais
+        setDocumentData(initialDocumentData);
       }
     }
   };
@@ -418,6 +460,14 @@ export default function DocumentPage() {
           tonometry: null
         }
       };
+
+      // Salvar paciente no Firestore para aparecer na lista
+      try {
+        await createPatient(quickPatient.name, docId, quickPatient.exams, quickPatient.id);
+        console.log('Paciente de atendimento rápido criado no Firestore');
+      } catch (error) {
+        console.error('Erro ao salvar paciente no Firestore:', error);
+      }
 
       // Selecionar o paciente temporário (isso sincroniza automaticamente)
       await handlePatientSelect(quickPatient);

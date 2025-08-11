@@ -20,16 +20,16 @@ export const generatePatientId = () => {
 };
 
 // Criar novo paciente
-export const createPatient = async (documentId, patientData) => {
+export const createPatient = async (patientName, documentId, exams = null, customId = null) => {
   try {
     const patientsRef = collection(db, 'patients');
     const newPatient = {
-      name: patientData.name,
+      name: patientName,
       documentId, // Vincular ao documento
       status: 'active',
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
-      exams: {
+      exams: exams || {
         ar: {
           uploaded: false,
           url: null,
@@ -44,8 +44,17 @@ export const createPatient = async (documentId, patientData) => {
         }
       }
     };
+
+    let docRef;
+    if (customId) {
+      // Usar ID customizado (para atendimento rápido)
+      docRef = doc(patientsRef, customId);
+      await setDoc(docRef, newPatient);
+    } else {
+      // Gerar ID automaticamente
+      docRef = await addDoc(patientsRef, newPatient);
+    }
     
-    const docRef = await addDoc(patientsRef, newPatient);
     return { id: docRef.id, ...newPatient };
   } catch (error) {
     console.error('Erro ao criar paciente:', error);
@@ -53,7 +62,7 @@ export const createPatient = async (documentId, patientData) => {
   }
 };
 
-// Buscar pacientes de um documento específico (SEM orderBy para evitar erro de índice)
+// Obter todos os pacientes de um documento específico (SEM orderBy para evitar erro de índice)
 export const getPatients = async (documentId, status = 'active') => {
   try {
     const patientsRef = collection(db, 'patients');
