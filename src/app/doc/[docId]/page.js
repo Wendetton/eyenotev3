@@ -399,6 +399,35 @@ export default function DocumentPage() {
     }
   };
 
+  const handleQuickCare = async () => {
+    try {
+      // Gerar número aleatório para o paciente
+      const randomNumber = Math.floor(Math.random() * 100000);
+      const quickPatientName = `Paciente #${randomNumber}`;
+      
+      // Criar paciente temporário para atendimento rápido
+      const quickPatient = {
+        id: `quick_${Date.now()}_${randomNumber}`,
+        name: quickPatientName,
+        status: 'active',
+        createdAt: new Date(),
+        documentId: docId,
+        isQuickCare: true, // Flag para identificar atendimento rápido
+        exams: {
+          ar: null,
+          tonometry: null
+        }
+      };
+
+      // Selecionar o paciente temporário (isso sincroniza automaticamente)
+      await handlePatientSelect(quickPatient);
+      
+    } catch (error) {
+      console.error('Erro ao iniciar atendimento rápido:', error);
+      alert('Erro ao iniciar atendimento rápido');
+    }
+  };
+
   // Modal de Pacientes Arquivados - GLOBAL para todos os contextos
   const renderArchivedModal = () => {
     if (!showArchivedPatients) return null;
@@ -611,12 +640,23 @@ export default function DocumentPage() {
                   Usuário: <span style={{ color: userColor, fontWeight: 'bold' }}>{userName}</span>
                 </p>
               </div>
-              <button
-                onClick={() => setShowArchivedPatients(true)}
-                className="bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-2 rounded-md text-sm font-medium"
-              >
-                Ver Arquivados
-              </button>
+              <div className="flex space-x-3">
+                <button
+                  onClick={() => setShowArchivedPatients(true)}
+                  className="bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-2 rounded-md text-sm font-medium"
+                >
+                  Ver Arquivados
+                </button>
+                <button
+                  onClick={handleQuickCare}
+                  className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium flex items-center"
+                >
+                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  </svg>
+                  Atendimento Rápido
+                </button>
+              </div>
             </div>
             <PatientSelector 
               documentId={docId}
@@ -648,7 +688,12 @@ export default function DocumentPage() {
               <div>
                 <h1 className="text-3xl font-bold text-gray-800">EyeNote</h1>
                 <p className="text-sm text-gray-600">
-                  Paciente: <span className="font-semibold">{selectedPatient.name}</span> | 
+                  Paciente: <span className="font-semibold">{selectedPatient.name}</span>
+                  {selectedPatient.isQuickCare && (
+                    <span className="ml-2 px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">
+                      Atendimento Rápido
+                    </span>
+                  )} | 
                   Documento: {docId} | 
                   Editando como: <span style={{ color: userColor, fontWeight: 'bold' }}>{userName}</span>
                 </p>
