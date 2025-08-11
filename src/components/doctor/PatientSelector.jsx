@@ -1,23 +1,25 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { subscribeToActivePatients } from '@/utils/patientUtils';
+import { subscribeToDocumentPatients } from '@/utils/patientUtils';
 import PatientCard from '@/components/patient/PatientCard';
 
-export default function PatientSelector({ selectedPatient, onPatientSelect }) {
+export default function PatientSelector({ documentId, selectedPatient, onPatientSelect }) {
   const [patients, setPatients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
-    // Subscrever a mudanças em tempo real dos pacientes ativos
-    const unsubscribe = subscribeToActivePatients((updatedPatients) => {
+    if (!documentId) return;
+    
+    // Subscrever a mudanças em tempo real dos pacientes do documento específico
+    const unsubscribe = subscribeToDocumentPatients(documentId, (updatedPatients) => {
       setPatients(updatedPatients);
       setLoading(false);
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [documentId]);
 
   const filteredPatients = patients.filter(patient =>
     patient.name.toLowerCase().includes(searchTerm.toLowerCase())

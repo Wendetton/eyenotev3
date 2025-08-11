@@ -2,7 +2,7 @@
 
 import { formatRelativeTime, hasAllExams, hasAnyExam } from '@/utils/patientUtils';
 
-export default function PatientCard({ patient, onClick, showArchiveButton = false, onArchive }) {
+export default function PatientCard({ patient, onClick, onArchive }) {
   const handleClick = () => {
     if (onClick) {
       onClick(patient);
@@ -80,8 +80,8 @@ export default function PatientCard({ patient, onClick, showArchiveButton = fals
         Criado {formatRelativeTime(patient.createdAt)}
       </div>
 
-      {/* Botão de arquivar (se aplicável) */}
-      {showArchiveButton && (
+      {/* Botão de arquivar */}
+      {onArchive && (
         <button
           onClick={handleArchive}
           className="absolute top-2 right-2 p-1 text-red-500 hover:text-red-700 hover:bg-red-100 rounded-full transition-colors duration-200"

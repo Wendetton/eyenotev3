@@ -8,7 +8,9 @@ import ProfileSelector from '@/components/common/ProfileSelector';
 import PatientSelector from '@/components/doctor/PatientSelector';
 import PatientCreationForm from '@/components/assistant/PatientCreationForm';
 import ExamViewer from '@/components/doctor/ExamViewer';
-import { getPatients, subscribeToDocumentPatients } from '@/utils/patientUtils';
+import { getPatients, subscribeToDocumentPatients, archivePatient } from '@/utils/patientUtils';
+import PatientCard from '@/components/patient/PatientCard';
+import ArchivedPatients from '@/components/common/ArchivedPatients';
 
 const getRandomColor = () => {
   const letters = '0123456789ABCDEF';
@@ -124,6 +126,7 @@ export default function DocumentPage() {
   const [selectedPatient, setSelectedPatient] = useState(null);
   const [patients, setPatients] = useState([]);
   const [showPatientForm, setShowPatientForm] = useState(false);
+  const [showArchivedPatients, setShowArchivedPatients] = useState(false);
   
   const presenceRef = useRef(null);
   const presenceIntervalRef = useRef(null);
@@ -329,8 +332,22 @@ export default function DocumentPage() {
     setUserProfile(profile);
   };
 
-  const handlePatientSelect = (patient) => {
+  const handlePatientSelect = async (patient) => {
     setSelectedPatient(patient);
+    
+    // Sincronizar seleção de paciente no documento para outros usuários
+    if (patient) {
+      try {
+        await updateDocInFirestore({
+          selectedPatientId: patient.id,
+          selectedPatientName: patient.name,
+          selectedBy: userName,
+          selectedAt: serverTimestamp()
+        });
+      } catch (error) {
+        console.error('Erro ao sincronizar seleção de paciente:', error);
+      }
+    }
   };
 
   const handleBackToPatients = () => {
@@ -346,6 +363,16 @@ export default function DocumentPage() {
   const handlePatientCreated = () => {
     setShowPatientForm(false);
     // Não precisa recarregar - o listener em tempo real já atualiza automaticamente
+  };
+
+  const handleArchivePatient = async (patientId) => {
+    try {
+      await archivePatient(patientId);
+      // O listener em tempo real já remove da lista automaticamente
+    } catch (error) {
+      console.error('Erro ao arquivar paciente:', error);
+      alert('Erro ao arquivar paciente');
+    }
   };
 
   if (loading || !documentData) {
@@ -458,7 +485,15 @@ export default function DocumentPage() {
           </div>
           
           <div className="bg-white rounded-lg shadow-lg p-6">
-            <h2 className="text-xl font-semibold mb-4 text-gray-800">Pacientes Ativos</h2>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-semibold text-gray-800">Pacientes Ativos</h2>
+              <button
+                onClick={() => setShowArchivedPatients(true)}
+                className="bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-2 rounded-md text-sm font-medium"
+              >
+                Ver Arquivados
+              </button>
+            </div>
             {patients.length === 0 ? (
               <div className="text-center py-8">
                 <p className="text-gray-500 mb-4">Nenhum paciente criado ainda</p>
@@ -472,20 +507,11 @@ export default function DocumentPage() {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {patients.map((patient) => (
-                  <div key={patient.id} className="border rounded-lg p-4 hover:shadow-md transition-shadow">
-                    <h3 className="font-semibold text-gray-800 mb-2">{patient.name}</h3>
-                    <div className="flex space-x-2 text-sm">
-                      <span className={`px-2 py-1 rounded ${patient.exams?.ar?.uploaded ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                        AR: {patient.exams?.ar?.uploaded ? '✓' : '✗'}
-                      </span>
-                      <span className={`px-2 py-1 rounded ${patient.exams?.tonometry?.uploaded ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                        Tono: {patient.exams?.tonometry?.uploaded ? '✓' : '✗'}
-                      </span>
-                    </div>
-                    <p className="text-xs text-gray-500 mt-2">
-                      Criado há {Math.floor((Date.now() - patient.createdAt?.toDate?.()?.getTime?.() || 0) / (1000 * 60))} min
-                    </p>
-                  </div>
+                  <PatientCard
+                    key={patient.id}
+                    patient={patient}
+                    onArchive={handleArchivePatient}
+                  />
                 ))}
               </div>
             )}
@@ -536,12 +562,17 @@ export default function DocumentPage() {
                   Usuário: <span style={{ color: userColor, fontWeight: 'bold' }}>{userName}</span>
                 </p>
               </div>
-              <div></div>
+              <button
+                onClick={() => setShowArchivedPatients(true)}
+                className="bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-2 rounded-md text-sm font-medium"
+              >
+                Ver Arquivados
+              </button>
             </div>
             <PatientSelector 
-              patients={patients} 
-              onPatientSelect={handlePatientSelect}
               documentId={docId}
+              selectedPatient={selectedPatient}
+              onPatientSelect={handlePatientSelect}
             />
           </div>
         </div>
@@ -593,41 +624,54 @@ export default function DocumentPage() {
                 colorClass="border-green-500"
               />
             </div>
-            
-            <div className="mt-6 bg-white p-6 rounded-lg shadow-lg border-t-4 border-purple-500">
-              <h2 className="text-xl font-semibold mb-4 text-gray-700">Adição</h2>
-              <div className="flex items-center mb-4">
-                <label htmlFor="addition-toggle" className="flex items-center cursor-pointer">
-                  <div className="relative">
-                    <input 
-                      type="checkbox" 
-                      id="addition-toggle" 
-                      className="sr-only" 
-                      checked={documentData.addition?.active || false} 
-                      onChange={handleAdditionToggle}
-                    />
-                    <div className={`block w-14 h-8 rounded-full ${documentData.addition?.active ? 'bg-purple-600' : 'bg-gray-300'}`}></div>
-                    <div className={`dot absolute left-1 top-1 bg-white w-6 h-6 rounded-full transition-transform ${documentData.addition?.active ? 'translate-x-6' : ''}`}></div>
-                  </div>
-                  <div className="ml-3 text-gray-700 font-medium">Ativar Adição</div>
-                </label>
-              </div>
-              {documentData.addition?.active && (
-                <div>
-                  <label htmlFor="addition-value" className="block text-sm font-medium text-gray-700 mb-1">Valor da Adição</label>
-                  <select 
-                    id="addition-value" 
-                    name="additionValue" 
-                    value={documentData.addition.value} 
-                    onChange={(e) => updateField('addition.value', e.target.value)} 
-                    className="mt-1 block w-full md:w-1/2 pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md shadow-sm text-black"
-                  >
-                    {additionOptions.map(option => (
-                      <option key={`addition-${option.value}`} value={option.value}>{option.label}</option>
-                    ))}
-                  </select>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+              {/* Seção de Adição */}
+              <div className="bg-white p-6 rounded-lg shadow-lg border-t-4 border-purple-500">
+                <h2 className="text-xl font-semibold mb-4 text-gray-700">Adição</h2>
+                <div className="flex items-center mb-4">
+                  <label htmlFor="addition-toggle" className="flex items-center cursor-pointer">
+                    <div className="relative">
+                      <input 
+                        type="checkbox" 
+                        id="addition-toggle" 
+                        className="sr-only" 
+                        checked={documentData.addition?.active || false} 
+                        onChange={handleAdditionToggle}
+                      />
+                      <div className={`block w-14 h-8 rounded-full ${documentData.addition?.active ? 'bg-purple-600' : 'bg-gray-300'}`}></div>
+                      <div className={`dot absolute left-1 top-1 bg-white w-6 h-6 rounded-full transition-transform ${documentData.addition?.active ? 'translate-x-6' : ''}`}></div>
+                    </div>
+                    <div className="ml-3 text-gray-700 font-medium">Ativar Adição</div>
+                  </label>
                 </div>
-              )}
+                {documentData.addition?.active && (
+                  <div>
+                    <label htmlFor="addition-value" className="block text-sm font-medium text-gray-700 mb-1">Valor da Adição</label>
+                    <select 
+                      id="addition-value" 
+                      name="additionValue" 
+                      value={documentData.addition.value} 
+                      onChange={(e) => updateField('addition.value', e.target.value)} 
+                      className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md shadow-sm text-black"
+                    >
+                      {additionOptions.map(option => (
+                        <option key={`addition-${option.value}`} value={option.value}>{option.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </div>
+
+              {/* Seção de Anotações */}
+              <div className="bg-white p-6 rounded-lg shadow-lg border-t-4 border-gray-500">
+                <h2 className="text-xl font-semibold mb-4 text-gray-700">Anotações</h2>
+                <textarea
+                  value={documentData.annotations || ''}
+                  onChange={(e) => updateField('annotations', e.target.value)}
+                  placeholder="Digite suas anotações aqui..."
+                  className="w-full h-32 p-3 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-sm text-black resize-none"
+                />
+              </div>
             </div>
             
             <div className="mt-6 bg-white p-6 rounded-lg shadow-lg border-t-4 border-gray-500">
@@ -671,27 +715,34 @@ export default function DocumentPage() {
                 ))}
               </ul>
             </div>
-            
-            {/* Anotações */}
-            <div>
-              <h2 className="text-lg font-semibold mb-3 text-gray-700 border-b pb-2">Anotações</h2>
-              <textarea
-                value={documentData.annotations || ''}
-                onChange={(e) => updateField('annotations', e.target.value)}
-                placeholder="Digite suas anotações aqui..."
-                className="w-full h-40 p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-sm text-black"
-              />
-            </div>
           </aside>
         </div>
         
         <footer className="mt-8 text-center text-sm text-gray-500 py-4 border-t border-gray-200">
           As alterações são salvas automaticamente.
         </footer>
+
+        {/* Modal de Pacientes Arquivados */}
+        {showArchivedPatients && (
+          <ArchivedPatients
+            documentId={docId}
+            onClose={() => setShowArchivedPatients(false)}
+          />
+        )}
       </div>
     );
   }
 
-  return null;
+  // Adicionar modal de pacientes arquivados para todos os perfis
+  return (
+    <>
+      {showArchivedPatients && (
+        <ArchivedPatients
+          documentId={docId}
+          onClose={() => setShowArchivedPatients(false)}
+        />
+      )}
+    </>
+  );
 }
 
