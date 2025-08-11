@@ -752,16 +752,15 @@ export default function DocumentPage() {
         <footer className="mt-8 text-center text-sm text-gray-500 py-4 border-t border-gray-200">
           As alterações são salvas automaticamente.
         </footer>
-      </div>
 
-      {/* Modal de Pacientes Arquivados - Disponível para todos os perfis */}
-      {showArchivedPatients && (
-        <ArchivedPatients
-          documentId={docId}
-          onClose={() => setShowArchivedPatients(false)}
-        />
-      )}
-    </div>
-  );
-}
+        {/* Modal de Pacientes Arquivados - Disponível para todos os perfis */}
+        {showArchivedPatients && (
+          <ArchivedPatients
+            documentId={docId}
+            onClose={() => setShowArchivedPatients(false)}
+          />
+        )}
+      </div>
+    );
+  }
 
