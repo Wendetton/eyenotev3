@@ -174,6 +174,18 @@ export default function DocumentPage() {
             annotations: typeof data.annotations === 'string' ? data.annotations : initialDocumentData.annotations, 
         };
         setDocumentData(currentData);
+        
+        // Sincronizar seleção de paciente entre usuários
+        if (data.selectedPatientId && data.selectedBy !== userName) {
+          // Buscar dados do paciente selecionado por outro usuário
+          if (data.selectedPatientId !== selectedPatient?.id) {
+            const syncPatient = {
+              id: data.selectedPatientId,
+              name: data.selectedPatientName || 'Paciente Selecionado'
+            };
+            setSelectedPatient(syncPatient);
+          }
+        }
       } else {
         setDoc(docRef, initialDocumentData).then(() => {
           setDocumentData(initialDocumentData);
@@ -350,8 +362,20 @@ export default function DocumentPage() {
     }
   };
 
-  const handleBackToPatients = () => {
+  const handleBackToPatients = async () => {
     setSelectedPatient(null);
+    
+    // Limpar seleção de paciente no documento para outros usuários
+    try {
+      await updateDocInFirestore({
+        selectedPatientId: null,
+        selectedPatientName: null,
+        selectedBy: null,
+        selectedAt: serverTimestamp()
+      });
+    } catch (error) {
+      console.error('Erro ao limpar seleção de paciente:', error);
+    }
   };
 
   const handleBackToProfile = () => {
@@ -573,6 +597,7 @@ export default function DocumentPage() {
               documentId={docId}
               selectedPatient={selectedPatient}
               onPatientSelect={handlePatientSelect}
+              onArchive={handleArchivePatient}
             />
           </div>
         </div>
@@ -688,6 +713,12 @@ export default function DocumentPage() {
                   className="px-6 py-2 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded-md shadow-sm transition duration-150 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
                 >
                   {copyStatus || 'Copiar para Tabela'}
+                </button>
+                <button 
+                  onClick={() => handleArchivePatient(selectedPatient.id)} 
+                  className="px-6 py-2 bg-yellow-600 hover:bg-yellow-700 text-white font-semibold rounded-md shadow-sm transition duration-150 ease-in-out focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:ring-opacity-50"
+                >
+                  Arquivar Paciente
                 </button>
               </div>
               {copyStatus && (
