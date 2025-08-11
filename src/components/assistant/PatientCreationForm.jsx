@@ -24,6 +24,9 @@ export default function PatientCreationForm({ documentId, onPatientCreated, onCa
   const handleSubmit = async (e) => {
     e.preventDefault();
     
+    console.log('🔧 [DEBUG] PatientCreationForm - handleSubmit iniciado');
+    console.log('🔧 [DEBUG] Dados do formulário:', { patientName: patientName.trim(), documentId, arFile, tonometryFile });
+    
     if (!patientName.trim()) {
       setError('Nome do paciente é obrigatório');
       return;
@@ -33,10 +36,17 @@ export default function PatientCreationForm({ documentId, onPatientCreated, onCa
       setIsCreating(true);
       setError('');
 
+      console.log('🔧 [DEBUG] Chamando createPatient...');
+      
       // Criar paciente no Firestore vinculado ao documento
-      const newPatient = await createPatient(documentId, {
-        name: patientName.trim()
-      });
+      const newPatient = await createPatient(
+        patientName.trim(), // nome do paciente
+        documentId,         // ID do documento
+        null,              // exams (será preenchido depois)
+        null               // customId (gerado automaticamente)
+      );
+
+      console.log('🔧 [DEBUG] Paciente criado com sucesso:', newPatient);
 
       // Upload das imagens se fornecidas
       const filesToUpload = {};
@@ -44,12 +54,17 @@ export default function PatientCreationForm({ documentId, onPatientCreated, onCa
       if (tonometryFile) filesToUpload.tonometry = tonometryFile;
 
       if (Object.keys(filesToUpload).length > 0) {
+        console.log('🔧 [DEBUG] Iniciando upload de imagens:', filesToUpload);
         await uploadMultipleImages(filesToUpload, newPatient.id);
+        console.log('🔧 [DEBUG] Upload de imagens concluído');
       }
 
       // Notificar componente pai
+      console.log('🔧 [DEBUG] Notificando componente pai...');
       if (onPatientCreated) {
         onPatientCreated(newPatient);
+      } else {
+        console.warn('⚠️ [WARNING] onPatientCreated callback não fornecido');
       }
 
       // Resetar formulário
@@ -57,8 +72,10 @@ export default function PatientCreationForm({ documentId, onPatientCreated, onCa
       setArFile(null);
       setTonometryFile(null);
 
+      console.log('🔧 [DEBUG] Formulário resetado com sucesso');
+
     } catch (error) {
-      console.error('Erro ao criar paciente:', error);
+      console.error('❌ [ERROR] Erro ao criar paciente:', error);
       setError(error.message || 'Erro ao criar paciente');
     } finally {
       setIsCreating(false);
