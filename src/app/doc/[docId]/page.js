@@ -399,53 +399,76 @@ export default function DocumentPage() {
     }
   };
 
+  // Modal de Pacientes Arquivados - GLOBAL para todos os contextos
+  const renderArchivedModal = () => {
+    if (!showArchivedPatients) return null;
+    
+    return (
+      <ArchivedPatients
+        documentId={docId}
+        onClose={() => setShowArchivedPatients(false)}
+      />
+    );
+  };
+
+  // Loading
   if (loading || !documentData) {
     return (
-      <div className="flex justify-center items-center h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Carregando documento...</p>
+      <>
+        <div className="flex justify-center items-center h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <p className="text-gray-600">Carregando documento...</p>
+          </div>
         </div>
-      </div>
+        {renderArchivedModal()}
+      </>
     );
   }
 
+  // Sem docId
   if (!docId) {
     return (
-      <div className="flex justify-center items-center h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
-        <div className="text-center">
-          <p className="text-red-600 text-lg">ID do documento não fornecido.</p>
-          <button 
-            onClick={() => router.push('/')}
-            className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-          >
-            Voltar ao Início
-          </button>
+      <>
+        <div className="flex justify-center items-center h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+          <div className="text-center">
+            <p className="text-red-600 text-lg">ID do documento não fornecido.</p>
+            <button 
+              onClick={() => router.push('/')}
+              className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+            >
+              Voltar ao Início
+            </button>
+          </div>
         </div>
-      </div>
+        {renderArchivedModal()}
+      </>
     );
   }
 
-  // Se não selecionou perfil ainda
+  // Seleção de perfil
   if (!userProfile) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
-        <div className="container mx-auto p-4">
-          <div className="text-center mb-8 pt-8">
-            <h1 className="text-4xl font-bold mb-2 text-gray-800">Eyenote</h1>
-            <p className="text-gray-600">Documento: {docId}</p>
-            <p className="text-sm text-gray-500 mt-2">
-              Usuário: <span style={{ color: userColor, fontWeight: 'bold' }}>{userName}</span>
-            </p>
+      <>
+        <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+          <div className="container mx-auto p-4">
+            <div className="text-center mb-8 pt-8">
+              <h1 className="text-4xl font-bold mb-2 text-gray-800">Eyenote</h1>
+              <p className="text-gray-600">Documento: {docId}</p>
+              <p className="text-sm text-gray-500 mt-2">
+                Usuário: <span style={{ color: userColor, fontWeight: 'bold' }}>{userName}</span>
+              </p>
+            </div>
+            <ProfileSelector 
+              onProfileSelect={handleProfileSelect} 
+              documentId={docId}
+              userName={userName}
+              userColor={userColor}
+            />
           </div>
-          <ProfileSelector 
-            onProfileSelect={handleProfileSelect} 
-            documentId={docId}
-            userName={userName}
-            userColor={userColor}
-          />
         </div>
-      </div>
+        {renderArchivedModal()}
+      </>
     );
   }
 
@@ -476,6 +499,7 @@ export default function DocumentPage() {
               onPatientCreated={handlePatientCreated}
             />
           </div>
+          {renderArchivedModal()}
         </div>
       );
     }
@@ -559,6 +583,7 @@ export default function DocumentPage() {
             </div>
           </div>
         </div>
+        {renderArchivedModal()}
       </div>
     );
   }
@@ -600,6 +625,7 @@ export default function DocumentPage() {
               onArchive={handleArchivePatient}
             />
           </div>
+          {renderArchivedModal()}
         </div>
       );
     }
@@ -752,14 +778,7 @@ export default function DocumentPage() {
         <footer className="mt-8 text-center text-sm text-gray-500 py-4 border-t border-gray-200">
           As alterações são salvas automaticamente.
         </footer>
-
-        {/* Modal de Pacientes Arquivados - Disponível para todos os perfis */}
-        {showArchivedPatients && (
-          <ArchivedPatients
-            documentId={docId}
-            onClose={() => setShowArchivedPatients(false)}
-          />
-        )}
+        {renderArchivedModal()}
       </div>
     );
   }
