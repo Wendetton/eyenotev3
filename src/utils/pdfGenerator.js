@@ -45,13 +45,13 @@ export const generatePrescriptionPDF = (patientData, documentData) => {
   // Título principal
   pdf.setFontSize(18);
   pdf.setFont('helvetica', 'bold');
-  pdf.text('RECEITUÁRIO ÓCULOS', 105, 25, { align: 'center' });
+  pdf.text('RECEITUARIO OCULOS', 105, 25, { align: 'center' });
   
   let currentY = 40;
   
   // ===== SEÇÃO DADOS DO PACIENTE =====
   const patientSectionHeight = 25;
-  const patientContentY = drawSection(pdf, '📋 DADOS DO PACIENTE', 15, currentY, 180, patientSectionHeight);
+  const patientContentY = drawSection(pdf, 'DADOS DO PACIENTE', 15, currentY, 180, patientSectionHeight);
   
   pdf.setFont('helvetica', 'normal');
   pdf.setFontSize(11);
@@ -63,7 +63,7 @@ export const generatePrescriptionPDF = (patientData, documentData) => {
   
   // ===== SEÇÃO PRESCRIÇÃO ÓPTICA =====
   const prescriptionSectionHeight = 65;
-  const prescriptionContentY = drawSection(pdf, '👁️ PRESCRIÇÃO ÓPTICA', 15, currentY, 180, prescriptionSectionHeight);
+  const prescriptionContentY = drawSection(pdf, 'PRESCRICAO OPTICA', 15, currentY, 180, prescriptionSectionHeight);
   
   // Configurações da tabela principal
   const tableStartX = 20;
@@ -119,27 +119,27 @@ export const generatePrescriptionPDF = (patientData, documentData) => {
   // Olho Direito
   const rightEyeY = tableStartY + rowHeight + 10;
   pdf.setFont('helvetica', 'bold');
-  pdf.text('👁️ OD (Direito)', tableStartX + 3, rightEyeY);
+  pdf.text('OD (Direito)', tableStartX + 3, rightEyeY);
   pdf.setFont('helvetica', 'normal');
   pdf.text(formatValue(documentData.rightEye.esf), colPositions[1] + colWidths[1]/2, rightEyeY, { align: 'center' });
   pdf.text(formatValue(documentData.rightEye.cil), colPositions[2] + colWidths[2]/2, rightEyeY, { align: 'center' });
-  pdf.text((documentData.rightEye.eixo || '0') + '°', colPositions[3] + colWidths[3]/2, rightEyeY, { align: 'center' });
+  pdf.text((documentData.rightEye.eixo || '0') + 'º', colPositions[3] + colWidths[3]/2, rightEyeY, { align: 'center' });
   
   // Olho Esquerdo
   const leftEyeY = tableStartY + (2 * rowHeight) + 10;
   pdf.setFont('helvetica', 'bold');
-  pdf.text('👁️ OE (Esquerdo)', tableStartX + 3, leftEyeY);
+  pdf.text('OE (Esquerdo)', tableStartX + 3, leftEyeY);
   pdf.setFont('helvetica', 'normal');
   pdf.text(formatValue(documentData.leftEye.esf), colPositions[1] + colWidths[1]/2, leftEyeY, { align: 'center' });
   pdf.text(formatValue(documentData.leftEye.cil), colPositions[2] + colWidths[2]/2, leftEyeY, { align: 'center' });
-  pdf.text((documentData.leftEye.eixo || '0') + '°', colPositions[3] + colWidths[3]/2, leftEyeY, { align: 'center' });
+  pdf.text((documentData.leftEye.eixo || '0') + 'º', colPositions[3] + colWidths[3]/2, leftEyeY, { align: 'center' });
   
   currentY += prescriptionSectionHeight + 10;
   
   // ===== SEÇÃO ADIÇÃO (condicional) =====
   if (documentData.addition && documentData.addition.active) {
     const additionSectionHeight = 35;
-    const additionContentY = drawSection(pdf, '➕ PRESCRIÇÃO PARA PERTO', 15, currentY, 180, additionSectionHeight);
+    const additionContentY = drawSection(pdf, 'PRESCRICAO PARA PERTO', 15, currentY, 180, additionSectionHeight);
     
     // Tabela de adição
     const additionTableY = additionContentY + 5;
@@ -157,7 +157,7 @@ export const generatePrescriptionPDF = (patientData, documentData) => {
     // Conteúdo da adição
     pdf.setFont('helvetica', 'bold');
     pdf.setFontSize(10);
-    pdf.text('ADIÇÃO PARA PERTO', tableStartX + 5, additionTableY + 8);
+    pdf.text('ADICAO PARA PERTO', tableStartX + 5, additionTableY + 8);
     pdf.text('(Ambos os olhos)', tableStartX + 5, additionTableY + 16);
     
     pdf.setFont('helvetica', 'bold');
@@ -169,20 +169,20 @@ export const generatePrescriptionPDF = (patientData, documentData) => {
   
   // ===== SEÇÃO TIPO DE LENTE =====
   const lenseSectionHeight = 45;
-  const lenseContentY = drawSection(pdf, '🔧 TIPO DE LENTE', 15, currentY, 180, lenseSectionHeight);
+  const lenseContentY = drawSection(pdf, 'TIPO DE LENTE', 15, currentY, 180, lenseSectionHeight);
   
   pdf.setFont('helvetica', 'normal');
   pdf.setFontSize(10);
   pdf.setTextColor('#000000');
   
   // Opções de lente em layout organizado
-  pdf.text('☐ Monofocal (Visão Simples)', 20, lenseContentY + 10);
-  pdf.text('☐ Bifocal', 20, lenseContentY + 20);
-  pdf.text('☐ Multifocal/Progressiva', 20, lenseContentY + 30);
+  pdf.text('( ) Monofocal (Visao Simples)', 20, lenseContentY + 10);
+  pdf.text('( ) Bifocal', 20, lenseContentY + 20);
+  pdf.text('( ) Multifocal/Progressiva', 20, lenseContentY + 30);
   
-  pdf.text('☐ Antirreflexo', 110, lenseContentY + 10);
-  pdf.text('☐ Fotossensível', 110, lenseContentY + 20);
-  pdf.text('☐ Blue Light', 110, lenseContentY + 30);
+  pdf.text('( ) Antirreflexo', 110, lenseContentY + 10);
+  pdf.text('( ) Fotossensivel', 110, lenseContentY + 20);
+  pdf.text('( ) Blue Light', 110, lenseContentY + 30);
   
   currentY += lenseSectionHeight + 15;
   
@@ -200,7 +200,7 @@ export const generatePrescriptionPDF = (patientData, documentData) => {
   pdf.line(20, currentY, 120, currentY);
   pdf.setFont('helvetica', 'normal');
   pdf.setFontSize(9);
-  pdf.text('Assinatura e Carimbo do Médico', 20, currentY + 8);
+  pdf.text('Assinatura e Carimbo do Medico', 20, currentY + 8);
   
   // Gerar o PDF
   const fileName = `receita_${patientData.name.replace(/\s+/g, '_')}_${formattedDate.replace(/\//g, '-')}.pdf`;
