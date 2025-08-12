@@ -175,21 +175,21 @@ export default function ExamViewer({ patient }) {
               )}
             </div>
           )}
+        </div>
 
-          {/* Status Summary */}
-          <div className="border-t pt-4 mt-6">
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-gray-600">Status dos Exames:</span>
-              <div className="flex space-x-4">
-                <span className={`flex items-center space-x-1 ${arStatus.color.split(' ')[0]}`}>
-                  <span className="w-2 h-2 rounded-full bg-current"></span>
-                  <span>AR</span>
-                </span>
-                <span className={`flex items-center space-x-1 ${tonometryStatus.color.split(' ')[0]}`}>
-                  <span className="w-2 h-2 rounded-full bg-current"></span>
-                  <span>TONO</span>
-                </span>
-              </div>
+        {/* Status Summary */}
+        <div className="border-t pt-4 mt-6">
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-gray-600">Status dos Exames:</span>
+            <div className="flex space-x-4">
+              <span className={`flex items-center space-x-1 ${arStatus.color.split(' ')[0]}`}>
+                <span className="w-2 h-2 rounded-full bg-current"></span>
+                <span>AR</span>
+              </span>
+              <span className={`flex items-center space-x-1 ${tonometryStatus.color.split(' ')[0]}`}>
+                <span className="w-2 h-2 rounded-full bg-current"></span>
+                <span>TONO</span>
+              </span>
             </div>
           </div>
         </div>

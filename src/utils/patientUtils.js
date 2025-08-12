@@ -2,6 +2,7 @@ import {
   collection, 
   doc, 
   addDoc, 
+  setDoc,
   updateDoc, 
   deleteDoc, 
   getDocs, 
@@ -20,16 +21,18 @@ export const generatePatientId = () => {
 };
 
 // Criar novo paciente
-export const createPatient = async (documentId, patientData) => {
+export const createPatient = async (patientName, documentId, exams = null, customId = null) => {
+  console.log('🔧 [DEBUG] createPatient chamada com:', { patientName, documentId, exams, customId });
+  
   try {
     const patientsRef = collection(db, 'patients');
     const newPatient = {
-      name: patientData.name,
+      name: patientName,
       documentId, // Vincular ao documento
       status: 'active',
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
-      exams: {
+      exams: exams || {
         ar: {
           uploaded: false,
           url: null,
@@ -44,17 +47,34 @@ export const createPatient = async (documentId, patientData) => {
         }
       }
     };
+
+    console.log('🔧 [DEBUG] Dados do paciente a serem salvos:', newPatient);
+
+    let docRef;
+    if (customId) {
+      // Usar ID customizado (para atendimento rápido)
+      docRef = doc(patientsRef, customId);
+      await setDoc(docRef, newPatient);
+      console.log('🔧 [DEBUG] Paciente salvo com ID customizado:', customId);
+    } else {
+      // Gerar ID automaticamente
+      docRef = await addDoc(patientsRef, newPatient);
+      console.log('🔧 [DEBUG] Paciente salvo com ID gerado:', docRef.id);
+    }
     
-    const docRef = await addDoc(patientsRef, newPatient);
-    return { id: docRef.id, ...newPatient };
+    const result = { id: docRef.id, ...newPatient };
+    console.log('🔧 [DEBUG] Paciente criado com sucesso:', result);
+    return result;
   } catch (error) {
-    console.error('Erro ao criar paciente:', error);
+    console.error('❌ [ERROR] Erro ao criar paciente:', error);
     throw error;
   }
 };
 
-// Buscar pacientes de um documento específico (SEM orderBy para evitar erro de índice)
+// Obter todos os pacientes de um documento específico (SEM orderBy para evitar erro de índice)
 export const getPatients = async (documentId, status = 'active') => {
+  console.log('🔧 [DEBUG] getPatients chamada para documento:', documentId, 'status:', status);
+  
   try {
     const patientsRef = collection(db, 'patients');
     const q = query(
@@ -70,6 +90,8 @@ export const getPatients = async (documentId, status = 'active') => {
       patients.push({ id: doc.id, ...doc.data() });
     });
     
+    console.log('🔧 [DEBUG] Pacientes encontrados:', patients.length, patients);
+    
     // Ordenar no cliente para evitar erro de índice
     patients.sort((a, b) => {
       const timeA = a.createdAt?.toDate?.() || new Date(0);
@@ -77,15 +99,18 @@ export const getPatients = async (documentId, status = 'active') => {
       return timeB - timeA; // Mais recente primeiro
     });
     
+    console.log('🔧 [DEBUG] Pacientes ordenados:', patients);
     return patients;
   } catch (error) {
-    console.error('Erro ao buscar pacientes do documento:', error);
+    console.error('❌ [ERROR] Erro ao buscar pacientes do documento:', error);
     throw error;
   }
 };
 
 // Buscar todos os pacientes ativos (SEM orderBy)
 export const getActivePatients = async () => {
+  console.log('🔧 [DEBUG] getActivePatients chamada');
+  
   try {
     const patientsRef = collection(db, 'patients');
     const q = query(
@@ -100,6 +125,8 @@ export const getActivePatients = async () => {
       patients.push({ id: doc.id, ...doc.data() });
     });
     
+    console.log('🔧 [DEBUG] Pacientes ativos encontrados:', patients.length);
+    
     // Ordenar no cliente
     patients.sort((a, b) => {
       const timeA = a.createdAt?.toDate?.() || new Date(0);
@@ -109,7 +136,7 @@ export const getActivePatients = async () => {
     
     return patients;
   } catch (error) {
-    console.error('Erro ao buscar pacientes ativos:', error);
+    console.error('❌ [ERROR] Erro ao buscar pacientes ativos:', error);
     throw error;
   }
 };
@@ -139,7 +166,7 @@ export const getArchivedPatients = async () => {
     
     return patients;
   } catch (error) {
-    console.error('Erro ao buscar pacientes arquivados:', error);
+    console.error('❌ [ERROR] Erro ao buscar pacientes arquivados:', error);
     throw error;
   }
 };
@@ -156,7 +183,7 @@ export const getPatientById = async (patientId) => {
       throw new Error('Paciente não encontrado');
     }
   } catch (error) {
-    console.error('Erro ao buscar paciente:', error);
+    console.error('❌ [ERROR] Erro ao buscar paciente:', error);
     throw error;
   }
 };
@@ -173,7 +200,7 @@ export const updatePatient = async (patientId, updateData) => {
     await updateDoc(patientRef, dataToUpdate);
     return true;
   } catch (error) {
-    console.error('Erro ao atualizar paciente:', error);
+    console.error('❌ [ERROR] Erro ao atualizar paciente:', error);
     throw error;
   }
 };
@@ -188,7 +215,7 @@ export const archivePatient = async (patientId) => {
     });
     return true;
   } catch (error) {
-    console.error('Erro ao arquivar paciente:', error);
+    console.error('❌ [ERROR] Erro ao arquivar paciente:', error);
     throw error;
   }
 };
@@ -203,7 +230,7 @@ export const reactivatePatient = async (patientId) => {
     });
     return true;
   } catch (error) {
-    console.error('Erro ao reativar paciente:', error);
+    console.error('❌ [ERROR] Erro ao reativar paciente:', error);
     throw error;
   }
 };
@@ -215,13 +242,15 @@ export const deletePatient = async (patientId) => {
     await deleteDoc(patientRef);
     return true;
   } catch (error) {
-    console.error('Erro ao deletar paciente:', error);
+    console.error('❌ [ERROR] Erro ao deletar paciente:', error);
     throw error;
   }
 };
 
 // Listener em tempo real para pacientes de um documento específico (SEM orderBy)
 export const subscribeToDocumentPatients = (documentId, callback) => {
+  console.log('🔧 [DEBUG] subscribeToDocumentPatients iniciado para documento:', documentId);
+  
   const patientsRef = collection(db, 'patients');
   const q = query(
     patientsRef, 
@@ -231,9 +260,13 @@ export const subscribeToDocumentPatients = (documentId, callback) => {
   );
   
   return onSnapshot(q, (querySnapshot) => {
+    console.log('🔧 [DEBUG] onSnapshot disparado, documentos encontrados:', querySnapshot.size);
+    
     const patients = [];
     querySnapshot.forEach((doc) => {
-      patients.push({ id: doc.id, ...doc.data() });
+      const patientData = { id: doc.id, ...doc.data() };
+      console.log('🔧 [DEBUG] Paciente encontrado:', patientData);
+      patients.push(patientData);
     });
     
     // Ordenar no cliente
@@ -243,7 +276,10 @@ export const subscribeToDocumentPatients = (documentId, callback) => {
       return timeB - timeA;
     });
     
+    console.log('🔧 [DEBUG] Lista final de pacientes enviada para callback:', patients);
     callback(patients);
+  }, (error) => {
+    console.error('❌ [ERROR] Erro no listener de pacientes:', error);
   });
 };
 
@@ -304,7 +340,7 @@ export const updateExamStatus = async (patientId, examType, examData) => {
     
     return true;
   } catch (error) {
-    console.error('Erro ao atualizar status do exame:', error);
+    console.error('❌ [ERROR] Erro ao atualizar status do exame:', error);
     throw error;
   }
 };
