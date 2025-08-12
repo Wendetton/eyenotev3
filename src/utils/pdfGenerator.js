@@ -28,7 +28,7 @@ export const generatePrescriptionPDF = (patientData, documentData) => {
   // ===== TÍTULO PRINCIPAL - COMPACTO =====
   pdf.setFontSize(16);
   pdf.setFont('helvetica', 'bold');
-  pdf.text('RECEITUARIO OCULOS', 105, currentY, { align: 'center' });
+  pdf.text('RECEITUÁRIO DE ÓCULOS', 105, currentY, { align: 'center' });
   
   // Linha separadora simples
   currentY += 8;
@@ -45,7 +45,7 @@ export const generatePrescriptionPDF = (patientData, documentData) => {
   // ===== PRESCRIÇÃO ÓPTICA - TABELA COMPACTA =====
   pdf.setFontSize(11);
   pdf.setFont('helvetica', 'bold');
-  pdf.text('PRESCRICAO OPTICA', 20, currentY);
+  pdf.text('PRESCRIÇÃO ÓPTICA', 20, currentY);
   currentY += 8;
   
   // Configurações da tabela compacta
@@ -107,7 +107,7 @@ export const generatePrescriptionPDF = (patientData, documentData) => {
   pdf.setFontSize(10);
   pdf.text('TIPO: ( ) Monofocal  ( ) Bifocal  ( ) Progressiva', 20, currentY);
   currentY += 10;
-  pdf.text('      ( ) Antirreflexo  ( ) Fotossensivel  ( ) Blue Light', 20, currentY);
+  pdf.text('      ( ) Antirreflexo  ( ) Fotossensível  ( ) Blue Light', 20, currentY);
   currentY += 15;
   
   // ===== RODAPÉ COMPACTO =====
@@ -122,7 +122,7 @@ export const generatePrescriptionPDF = (patientData, documentData) => {
   // Linha para assinatura
   pdf.line(120, currentY, 190, currentY);
   pdf.setFontSize(8);
-  pdf.text('Assinatura e Carimbo do Medico', 120, currentY + 8);
+  pdf.text('Assinatura e Carimbo do Médico', 120, currentY + 8);
   
   // Gerar o PDF
   const fileName = `receita_${patientData.name.replace(/\s+/g, '_')}_${formattedDate.replace(/\//g, '-')}.pdf`;
