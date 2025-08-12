@@ -1,5 +1,20 @@
 import jsPDF from 'jspdf';
 
+// Função para formatar valores com sinal positivo
+const formatValue = (value) => {
+  if (!value || value === '0.00' || value === '0') {
+    return '0.00';
+  }
+  
+  const numValue = parseFloat(value);
+  if (numValue > 0) {
+    return `+${numValue.toFixed(2)}`;
+  } else if (numValue < 0) {
+    return numValue.toFixed(2);
+  }
+  return '0.00';
+};
+
 export const generatePrescriptionPDF = (patientData, documentData) => {
   const pdf = new jsPDF();
   
@@ -16,68 +31,87 @@ export const generatePrescriptionPDF = (patientData, documentData) => {
   pdf.setFont('helvetica', 'normal');
   pdf.text('Paciente: ___________________________________________________________', 20, 50);
   
-  // Tabela principal - Cabeçalho
-  pdf.setFontSize(12);
-  pdf.setFont('helvetica', 'bold');
+  // Tabela principal - Configurações
+  const tableStartX = 15;
+  const tableEndX = 195;
+  const colWidths = [60, 45, 45, 45]; // Larguras das colunas
+  const colPositions = [
+    tableStartX,
+    tableStartX + colWidths[0],
+    tableStartX + colWidths[0] + colWidths[1],
+    tableStartX + colWidths[0] + colWidths[1] + colWidths[2]
+  ];
   
   // Cabeçalhos da tabela
   const startY = 80;
-  pdf.text('Esf', 80, startY);
-  pdf.text('Cil', 120, startY);
-  pdf.text('Eixo', 160, startY);
+  pdf.setFontSize(12);
+  pdf.setFont('helvetica', 'bold');
   
-  // Linhas da tabela
+  // Cabeçalhos centralizados
+  pdf.text('Esf', colPositions[1] + colWidths[1]/2, startY, { align: 'center' });
+  pdf.text('Cil', colPositions[2] + colWidths[2]/2, startY, { align: 'center' });
+  pdf.text('Eixo', colPositions[3] + colWidths[3]/2, startY, { align: 'center' });
+  
+  // Dados da tabela
   pdf.setFont('helvetica', 'normal');
   
   // Olho Direito
   const rightEyeY = startY + 20;
-  pdf.text('Olho Direito', 20, rightEyeY);
-  pdf.text(documentData.rightEye.esf || '0.00', 80, rightEyeY);
-  pdf.text(documentData.rightEye.cil || '0.00', 120, rightEyeY);
-  pdf.text(documentData.rightEye.eixo || '0', 160, rightEyeY);
+  pdf.text('Olho Direito', colPositions[0] + 5, rightEyeY);
+  pdf.text(formatValue(documentData.rightEye.esf), colPositions[1] + colWidths[1]/2, rightEyeY, { align: 'center' });
+  pdf.text(formatValue(documentData.rightEye.cil), colPositions[2] + colWidths[2]/2, rightEyeY, { align: 'center' });
+  pdf.text(documentData.rightEye.eixo || '0', colPositions[3] + colWidths[3]/2, rightEyeY, { align: 'center' });
   
   // Olho Esquerdo
   const leftEyeY = rightEyeY + 20;
-  pdf.text('Olho Esquerdo', 20, leftEyeY);
-  pdf.text(documentData.leftEye.esf || '0.00', 80, leftEyeY);
-  pdf.text(documentData.leftEye.cil || '0.00', 120, leftEyeY);
-  pdf.text(documentData.leftEye.eixo || '0', 160, leftEyeY);
+  pdf.text('Olho Esquerdo', colPositions[0] + 5, leftEyeY);
+  pdf.text(formatValue(documentData.leftEye.esf), colPositions[1] + colWidths[1]/2, leftEyeY, { align: 'center' });
+  pdf.text(formatValue(documentData.leftEye.cil), colPositions[2] + colWidths[2]/2, leftEyeY, { align: 'center' });
+  pdf.text(documentData.leftEye.eixo || '0', colPositions[3] + colWidths[3]/2, leftEyeY, { align: 'center' });
   
-  // Linhas da tabela
-  const tableStartX = 15;
-  const tableEndX = 195;
-  
-  // Linha horizontal superior
-  pdf.line(tableStartX, startY - 5, tableEndX, startY - 5);
-  
-  // Linha horizontal do cabeçalho
-  pdf.line(tableStartX, startY + 5, tableEndX, startY + 5);
-  
-  // Linha horizontal entre olhos
-  pdf.line(tableStartX, rightEyeY + 5, tableEndX, rightEyeY + 5);
-  
-  // Linha horizontal inferior
-  pdf.line(tableStartX, leftEyeY + 5, tableEndX, leftEyeY + 5);
+  // Desenhar linhas da tabela principal
+  // Linhas horizontais
+  pdf.line(tableStartX, startY - 5, tableEndX, startY - 5); // Superior
+  pdf.line(tableStartX, startY + 5, tableEndX, startY + 5); // Cabeçalho
+  pdf.line(tableStartX, rightEyeY + 5, tableEndX, rightEyeY + 5); // Entre olhos
+  pdf.line(tableStartX, leftEyeY + 5, tableEndX, leftEyeY + 5); // Inferior
   
   // Linhas verticais
-  pdf.line(tableStartX, startY - 5, tableStartX, leftEyeY + 5); // Esquerda
-  pdf.line(75, startY - 5, 75, leftEyeY + 5); // Antes Esf
-  pdf.line(115, startY - 5, 115, leftEyeY + 5); // Antes Cil
-  pdf.line(155, startY - 5, 155, leftEyeY + 5); // Antes Eixo
+  pdf.line(colPositions[0], startY - 5, colPositions[0], leftEyeY + 5); // Esquerda
+  pdf.line(colPositions[1], startY - 5, colPositions[1], leftEyeY + 5); // Antes Esf
+  pdf.line(colPositions[2], startY - 5, colPositions[2], leftEyeY + 5); // Antes Cil
+  pdf.line(colPositions[3], startY - 5, colPositions[3], leftEyeY + 5); // Antes Eixo
   pdf.line(tableEndX, startY - 5, tableEndX, leftEyeY + 5); // Direita
   
   let currentY = leftEyeY + 30;
   
-  // Seção de Adição (condicional)
+  // Seção de Adição em formato de tabela (condicional)
   if (documentData.addition && documentData.addition.active) {
+    // Título da seção
     pdf.setFont('helvetica', 'bold');
     pdf.text('Perto', 20, currentY);
     
     currentY += 15;
-    pdf.setFont('helvetica', 'normal');
-    pdf.text(`Adição em ambos os olhos: ${documentData.addition.value || '+0.75'}`, 20, currentY);
     
-    currentY += 20;
+    // Tabela de adição
+    const additionTableY = currentY;
+    const additionTableHeight = 20;
+    
+    // Desenhar tabela de adição
+    pdf.line(tableStartX, additionTableY - 5, tableEndX, additionTableY - 5); // Superior
+    pdf.line(tableStartX, additionTableY + additionTableHeight - 5, tableEndX, additionTableY + additionTableHeight - 5); // Inferior
+    
+    // Linhas verticais da tabela de adição
+    pdf.line(tableStartX, additionTableY - 5, tableStartX, additionTableY + additionTableHeight - 5); // Esquerda
+    pdf.line(colPositions[1], additionTableY - 5, colPositions[1], additionTableY + additionTableHeight - 5); // Divisão
+    pdf.line(tableEndX, additionTableY - 5, tableEndX, additionTableY + additionTableHeight - 5); // Direita
+    
+    // Conteúdo da tabela de adição
+    pdf.setFont('helvetica', 'normal');
+    pdf.text('Adição em ambos os olhos', colPositions[0] + 5, additionTableY + 10);
+    pdf.text(formatValue(documentData.addition.value), colPositions[1] + (tableEndX - colPositions[1])/2, additionTableY + 10, { align: 'center' });
+    
+    currentY += 35;
   }
   
   // Opções de lentes
