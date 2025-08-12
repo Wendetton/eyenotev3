@@ -11,6 +11,7 @@ import ExamViewer from '@/components/doctor/ExamViewer';
 import { getPatients, subscribeToDocumentPatients, archivePatient, createPatient } from '@/utils/patientUtils';
 import PatientCard from '@/components/patient/PatientCard';
 import ArchivedPatients from '@/components/common/ArchivedPatients';
+import { generatePrescriptionPDF } from '@/utils/pdfGenerator';
 
 const getRandomColor = () => {
   const letters = '0123456789ABCDEF';
@@ -478,6 +479,25 @@ export default function DocumentPage() {
     }
   };
 
+  const handleGeneratePrescription = () => {
+    try {
+      if (!selectedPatient) {
+        alert('Nenhum paciente selecionado');
+        return;
+      }
+
+      // Gerar o PDF da receita
+      const fileName = generatePrescriptionPDF(selectedPatient, documentData);
+      
+      // Feedback para o usuário
+      alert(`Receita gerada com sucesso: ${fileName}`);
+      
+    } catch (error) {
+      console.error('Erro ao gerar receita:', error);
+      alert('Erro ao gerar receita. Tente novamente.');
+    }
+  };
+
   // Modal de Pacientes Arquivados - GLOBAL para todos os contextos
   const renderArchivedModal = () => {
     if (!showArchivedPatients) return null;
@@ -840,6 +860,12 @@ export default function DocumentPage() {
                   className="px-6 py-2 bg-yellow-600 hover:bg-yellow-700 text-white font-semibold rounded-md shadow-sm transition duration-150 ease-in-out focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:ring-opacity-50"
                 >
                   Arquivar Paciente
+                </button>
+                <button 
+                  onClick={handleGeneratePrescription} 
+                  className="px-6 py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-md shadow-sm transition duration-150 ease-in-out focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-opacity-50"
+                >
+                  Gerar Receita
                 </button>
               </div>
               {copyStatus && (
