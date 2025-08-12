@@ -15,192 +15,114 @@ const formatValue = (value) => {
   return '0.00';
 };
 
-// Função para desenhar seção com título
-const drawSection = (pdf, title, x, y, width, height) => {
-  // Fundo do cabeçalho
-  pdf.setFillColor('#F5F5F5');
-  pdf.rect(x, y, width, 15, 'F');
-  
-  // Borda da seção
-  pdf.setDrawColor('#333333');
-  pdf.setLineWidth(1.2);
-  pdf.rect(x, y, width, height);
-  
-  // Título da seção
-  pdf.setFont('helvetica', 'bold');
-  pdf.setFontSize(11);
-  pdf.setTextColor('#333333');
-  pdf.text(title, x + 5, y + 10);
-  
-  return y + 15; // Retorna Y após o cabeçalho
-};
-
 export const generatePrescriptionPDF = (patientData, documentData) => {
   const pdf = new jsPDF();
   
-  // Configurações gerais
+  // Configurações gerais - layout clean
   pdf.setFont('helvetica');
   pdf.setTextColor('#000000');
+  pdf.setLineWidth(0.5); // Linhas mais finas para economia
   
-  // Título principal
-  pdf.setFontSize(18);
+  let currentY = 20; // Começar mais no topo
+  
+  // ===== TÍTULO PRINCIPAL - COMPACTO =====
+  pdf.setFontSize(16);
   pdf.setFont('helvetica', 'bold');
-  pdf.text('RECEITUARIO OCULOS', 105, 25, { align: 'center' });
+  pdf.text('RECEITUARIO OCULOS', 105, currentY, { align: 'center' });
   
-  let currentY = 40;
+  // Linha separadora simples
+  currentY += 8;
+  pdf.line(20, currentY, 190, currentY);
+  currentY += 12;
   
-  // ===== SEÇÃO DADOS DO PACIENTE =====
-  const patientSectionHeight = 25;
-  const patientContentY = drawSection(pdf, 'DADOS DO PACIENTE', 15, currentY, 180, patientSectionHeight);
-  
-  pdf.setFont('helvetica', 'normal');
+  // ===== DADOS DO PACIENTE - UMA LINHA =====
   pdf.setFontSize(11);
-  pdf.setTextColor('#000000');
-  pdf.text('Nome:', 20, patientContentY + 8);
-  pdf.line(35, patientContentY + 8, 190, patientContentY + 8);
+  pdf.setFont('helvetica', 'normal');
+  pdf.text('PACIENTE:', 20, currentY);
+  pdf.line(45, currentY, 190, currentY);
+  currentY += 15;
   
-  currentY += patientSectionHeight + 10;
+  // ===== PRESCRIÇÃO ÓPTICA - TABELA COMPACTA =====
+  pdf.setFontSize(11);
+  pdf.setFont('helvetica', 'bold');
+  pdf.text('PRESCRICAO OPTICA', 20, currentY);
+  currentY += 8;
   
-  // ===== SEÇÃO PRESCRIÇÃO ÓPTICA =====
-  const prescriptionSectionHeight = 65;
-  const prescriptionContentY = drawSection(pdf, 'PRESCRICAO OPTICA', 15, currentY, 180, prescriptionSectionHeight);
-  
-  // Configurações da tabela principal
+  // Configurações da tabela compacta
   const tableStartX = 20;
-  const tableWidth = 170;
-  const colWidths = [50, 40, 40, 40];
-  const colPositions = [
-    tableStartX,
-    tableStartX + colWidths[0],
-    tableStartX + colWidths[0] + colWidths[1],
-    tableStartX + colWidths[0] + colWidths[1] + colWidths[2]
-  ];
+  const tableWidth = 120; // Tabela mais estreita
+  const colWidths = [30, 30, 30, 30];
+  const rowHeight = 12; // Linhas mais baixas
   
-  const tableStartY = prescriptionContentY + 5;
-  const rowHeight = 15;
-  
-  // Cabeçalho da tabela com fundo
-  pdf.setFillColor('#E8E8E8');
-  pdf.rect(tableStartX, tableStartY, tableWidth, rowHeight, 'F');
+  // Cabeçalho da tabela
+  pdf.setDrawColor('#000000');
+  pdf.setLineWidth(0.5);
   
   // Bordas da tabela
-  pdf.setDrawColor('#666666');
-  pdf.setLineWidth(1);
+  pdf.rect(tableStartX, currentY, tableWidth, rowHeight * 3);
   
   // Linhas horizontais
-  for (let i = 0; i <= 3; i++) {
-    pdf.line(tableStartX, tableStartY + (i * rowHeight), tableStartX + tableWidth, tableStartY + (i * rowHeight));
-  }
+  pdf.line(tableStartX, currentY + rowHeight, tableStartX + tableWidth, currentY + rowHeight);
+  pdf.line(tableStartX, currentY + (rowHeight * 2), tableStartX + tableWidth, currentY + (rowHeight * 2));
   
   // Linhas verticais
-  for (let i = 0; i <= 4; i++) {
-    const x = i === 0 ? tableStartX : 
-              i === 1 ? colPositions[1] :
-              i === 2 ? colPositions[2] :
-              i === 3 ? colPositions[3] :
-              tableStartX + tableWidth;
-    pdf.line(x, tableStartY, x, tableStartY + (3 * rowHeight));
-  }
+  pdf.line(tableStartX + colWidths[0], currentY, tableStartX + colWidths[0], currentY + (rowHeight * 3));
+  pdf.line(tableStartX + colWidths[0] + colWidths[1], currentY, tableStartX + colWidths[0] + colWidths[1], currentY + (rowHeight * 3));
+  pdf.line(tableStartX + colWidths[0] + colWidths[1] + colWidths[2], currentY, tableStartX + colWidths[0] + colWidths[1] + colWidths[2], currentY + (rowHeight * 3));
   
-  // Cabeçalhos da tabela
+  // Cabeçalhos
   pdf.setFont('helvetica', 'bold');
+  pdf.setFontSize(9);
+  pdf.text('', tableStartX + 15, currentY + 8, { align: 'center' });
+  pdf.text('ESF', tableStartX + colWidths[0] + 15, currentY + 8, { align: 'center' });
+  pdf.text('CIL', tableStartX + colWidths[0] + colWidths[1] + 15, currentY + 8, { align: 'center' });
+  pdf.text('EIXO', tableStartX + colWidths[0] + colWidths[1] + colWidths[2] + 15, currentY + 8, { align: 'center' });
+  
+  // Dados OD
+  pdf.setFont('helvetica', 'normal');
   pdf.setFontSize(10);
-  pdf.setTextColor('#333333');
+  pdf.text('OD', tableStartX + 15, currentY + rowHeight + 8, { align: 'center' });
+  pdf.text(formatValue(documentData.rightEye.esf), tableStartX + colWidths[0] + 15, currentY + rowHeight + 8, { align: 'center' });
+  pdf.text(formatValue(documentData.rightEye.cil), tableStartX + colWidths[0] + colWidths[1] + 15, currentY + rowHeight + 8, { align: 'center' });
+  pdf.text((documentData.rightEye.eixo || '0') + 'º', tableStartX + colWidths[0] + colWidths[1] + colWidths[2] + 15, currentY + rowHeight + 8, { align: 'center' });
   
-  pdf.text('ESF', colPositions[1] + colWidths[1]/2, tableStartY + 10, { align: 'center' });
-  pdf.text('CIL', colPositions[2] + colWidths[2]/2, tableStartY + 10, { align: 'center' });
-  pdf.text('EIXO', colPositions[3] + colWidths[3]/2, tableStartY + 10, { align: 'center' });
+  // Dados OE
+  pdf.text('OE', tableStartX + 15, currentY + (rowHeight * 2) + 8, { align: 'center' });
+  pdf.text(formatValue(documentData.leftEye.esf), tableStartX + colWidths[0] + 15, currentY + (rowHeight * 2) + 8, { align: 'center' });
+  pdf.text(formatValue(documentData.leftEye.cil), tableStartX + colWidths[0] + colWidths[1] + 15, currentY + (rowHeight * 2) + 8, { align: 'center' });
+  pdf.text((documentData.leftEye.eixo || '0') + 'º', tableStartX + colWidths[0] + colWidths[1] + colWidths[2] + 15, currentY + (rowHeight * 2) + 8, { align: 'center' });
   
-  // Dados da tabela
-  pdf.setFont('helvetica', 'normal');
-  pdf.setFontSize(11);
-  pdf.setTextColor('#000000');
+  currentY += (rowHeight * 3) + 12;
   
-  // Olho Direito
-  const rightEyeY = tableStartY + rowHeight + 10;
-  pdf.setFont('helvetica', 'bold');
-  pdf.text('OD (Direito)', tableStartX + 3, rightEyeY);
-  pdf.setFont('helvetica', 'normal');
-  pdf.text(formatValue(documentData.rightEye.esf), colPositions[1] + colWidths[1]/2, rightEyeY, { align: 'center' });
-  pdf.text(formatValue(documentData.rightEye.cil), colPositions[2] + colWidths[2]/2, rightEyeY, { align: 'center' });
-  pdf.text((documentData.rightEye.eixo || '0') + 'º', colPositions[3] + colWidths[3]/2, rightEyeY, { align: 'center' });
-  
-  // Olho Esquerdo
-  const leftEyeY = tableStartY + (2 * rowHeight) + 10;
-  pdf.setFont('helvetica', 'bold');
-  pdf.text('OE (Esquerdo)', tableStartX + 3, leftEyeY);
-  pdf.setFont('helvetica', 'normal');
-  pdf.text(formatValue(documentData.leftEye.esf), colPositions[1] + colWidths[1]/2, leftEyeY, { align: 'center' });
-  pdf.text(formatValue(documentData.leftEye.cil), colPositions[2] + colWidths[2]/2, leftEyeY, { align: 'center' });
-  pdf.text((documentData.leftEye.eixo || '0') + 'º', colPositions[3] + colWidths[3]/2, leftEyeY, { align: 'center' });
-  
-  currentY += prescriptionSectionHeight + 10;
-  
-  // ===== SEÇÃO ADIÇÃO (condicional) =====
+  // ===== ADIÇÃO - UMA LINHA SIMPLES =====
   if (documentData.addition && documentData.addition.active) {
-    const additionSectionHeight = 35;
-    const additionContentY = drawSection(pdf, 'PRESCRICAO PARA PERTO', 15, currentY, 180, additionSectionHeight);
-    
-    // Tabela de adição
-    const additionTableY = additionContentY + 5;
-    const additionTableHeight = 20;
-    
-    // Fundo da tabela de adição
-    pdf.setFillColor('#F9F9F9');
-    pdf.rect(tableStartX, additionTableY, tableWidth, additionTableHeight, 'F');
-    
-    // Bordas da tabela de adição
-    pdf.setDrawColor('#666666');
-    pdf.rect(tableStartX, additionTableY, tableWidth, additionTableHeight);
-    pdf.line(tableStartX + 120, additionTableY, tableStartX + 120, additionTableY + additionTableHeight);
-    
-    // Conteúdo da adição
-    pdf.setFont('helvetica', 'bold');
+    pdf.setFont('helvetica', 'normal');
     pdf.setFontSize(10);
-    pdf.text('ADICAO PARA PERTO', tableStartX + 5, additionTableY + 8);
-    pdf.text('(Ambos os olhos)', tableStartX + 5, additionTableY + 16);
-    
-    pdf.setFont('helvetica', 'bold');
-    pdf.setFontSize(12);
-    pdf.text(formatValue(documentData.addition.value) + ' D', tableStartX + 120 + 25, additionTableY + 12, { align: 'center' });
-    
-    currentY += additionSectionHeight + 10;
+    pdf.text(`ADICAO: ${formatValue(documentData.addition.value)} D (ambos os olhos)`, 20, currentY);
+    currentY += 12;
   }
   
-  // ===== SEÇÃO TIPO DE LENTE =====
-  const lenseSectionHeight = 45;
-  const lenseContentY = drawSection(pdf, 'TIPO DE LENTE', 15, currentY, 180, lenseSectionHeight);
-  
+  // ===== TIPO DE LENTE - COMPACTO =====
   pdf.setFont('helvetica', 'normal');
   pdf.setFontSize(10);
-  pdf.setTextColor('#000000');
+  pdf.text('TIPO: ( ) Monofocal  ( ) Bifocal  ( ) Progressiva', 20, currentY);
+  currentY += 10;
+  pdf.text('      ( ) Antirreflexo  ( ) Fotossensivel  ( ) Blue Light', 20, currentY);
+  currentY += 15;
   
-  // Opções de lente em layout organizado
-  pdf.text('( ) Monofocal (Visao Simples)', 20, lenseContentY + 10);
-  pdf.text('( ) Bifocal', 20, lenseContentY + 20);
-  pdf.text('( ) Multifocal/Progressiva', 20, lenseContentY + 30);
-  
-  pdf.text('( ) Antirreflexo', 110, lenseContentY + 10);
-  pdf.text('( ) Fotossensivel', 110, lenseContentY + 20);
-  pdf.text('( ) Blue Light', 110, lenseContentY + 30);
-  
-  currentY += lenseSectionHeight + 15;
-  
-  // ===== RODAPÉ =====
-  // Data
+  // ===== RODAPÉ COMPACTO =====
   const today = new Date();
   const formattedDate = today.toLocaleDateString('pt-BR');
   
+  // Data e assinatura na mesma linha
   pdf.setFont('helvetica', 'normal');
-  pdf.setFontSize(11);
+  pdf.setFontSize(10);
   pdf.text(`Data: ${formattedDate}`, 20, currentY);
   
-  // Campo para assinatura
-  currentY += 20;
-  pdf.line(20, currentY, 120, currentY);
-  pdf.setFont('helvetica', 'normal');
-  pdf.setFontSize(9);
-  pdf.text('Assinatura e Carimbo do Medico', 20, currentY + 8);
+  // Linha para assinatura
+  pdf.line(120, currentY, 190, currentY);
+  pdf.setFontSize(8);
+  pdf.text('Assinatura e Carimbo do Medico', 120, currentY + 8);
   
   // Gerar o PDF
   const fileName = `receita_${patientData.name.replace(/\s+/g, '_')}_${formattedDate.replace(/\//g, '-')}.pdf`;
