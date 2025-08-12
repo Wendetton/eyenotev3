@@ -10,9 +10,9 @@ export default function ExamViewer({ patient }) {
 
   if (!patient) {
     return (
-      <div className="bg-white rounded-lg shadow-sm border p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Exames</h3>
-        <div className="text-center text-gray-500">
+      <div className="bg-white p-6 rounded-lg shadow-lg border-t-4 border-purple-500">
+        <h2 className="text-xl font-semibold mb-4 text-gray-700">Exames do Paciente</h2>
+        <div className="text-center text-gray-500 py-8">
           <div className="text-4xl mb-2">📋</div>
           <p>Selecione um paciente para visualizar os exames</p>
         </div>
@@ -48,41 +48,36 @@ export default function ExamViewer({ patient }) {
 
   return (
     <>
-      <div className="bg-white rounded-lg shadow-sm border">
-        {/* Header */}
-        <div className="bg-gray-50 px-4 py-3 border-b">
-          <h3 className="text-lg font-semibold text-gray-900">Exames do Paciente</h3>
-          <p className="text-sm text-gray-600">{patient.name}</p>
-        </div>
+      <div className="bg-white p-6 rounded-lg shadow-lg border-t-4 border-purple-500">
+        <h2 className="text-xl font-semibold mb-4 text-gray-700">Exames do Paciente</h2>
+        <p className="text-sm text-gray-600 mb-4">{patient.name}</p>
 
-        {/* Exam Type Selector */}
-        <div className="p-4 border-b">
-          <div className="flex space-x-2">
-            <button
-              onClick={() => setSelectedExam('ar')}
-              className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-colors ${
-                selectedExam === 'ar'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              AR - Autorrefrator
-            </button>
-            <button
-              onClick={() => setSelectedExam('tonometry')}
-              className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-colors ${
-                selectedExam === 'tonometry'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              Tono - Tonometria
-            </button>
-          </div>
+        {/* Exam Type Selector - Botões Abreviados */}
+        <div className="flex space-x-2 mb-6">
+          <button
+            onClick={() => setSelectedExam('ar')}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              selectedExam === 'ar'
+                ? 'bg-blue-600 text-white'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+          >
+            AR
+          </button>
+          <button
+            onClick={() => setSelectedExam('tonometry')}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              selectedExam === 'tonometry'
+                ? 'bg-blue-600 text-white'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+          >
+            TONO
+          </button>
         </div>
 
         {/* Exam Content */}
-        <div className="p-4">
+        <div className="space-y-4">
           {selectedExam === 'ar' && (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
@@ -101,7 +96,7 @@ export default function ExamViewer({ patient }) {
                     <img
                       src={arExam.metadata?.thumbnailUrl || arExam.url}
                       alt="Exame AR"
-                      className="w-full h-48 object-cover"
+                      className="w-full h-56 object-cover"
                       onError={(e) => {
                         e.target.src = arExam.url; // Fallback para imagem principal
                       }}
@@ -150,7 +145,7 @@ export default function ExamViewer({ patient }) {
                     <img
                       src={tonometryExam.metadata?.thumbnailUrl || tonometryExam.url}
                       alt="Exame Tonometria"
-                      className="w-full h-48 object-cover"
+                      className="w-full h-56 object-cover"
                       onError={(e) => {
                         e.target.src = tonometryExam.url; // Fallback para imagem principal
                       }}
@@ -180,21 +175,21 @@ export default function ExamViewer({ patient }) {
               )}
             </div>
           )}
-        </div>
 
-        {/* Summary */}
-        <div className="bg-gray-50 px-4 py-3 border-t">
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-gray-600">Status dos Exames:</span>
-            <div className="flex space-x-4">
-              <span className={`flex items-center space-x-1 ${arStatus.color.split(' ')[0]}`}>
-                <span className="w-2 h-2 rounded-full bg-current"></span>
-                <span>AR</span>
-              </span>
-              <span className={`flex items-center space-x-1 ${tonometryStatus.color.split(' ')[0]}`}>
-                <span className="w-2 h-2 rounded-full bg-current"></span>
-                <span>Tono</span>
-              </span>
+          {/* Status Summary */}
+          <div className="border-t pt-4 mt-6">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-gray-600">Status dos Exames:</span>
+              <div className="flex space-x-4">
+                <span className={`flex items-center space-x-1 ${arStatus.color.split(' ')[0]}`}>
+                  <span className="w-2 h-2 rounded-full bg-current"></span>
+                  <span>AR</span>
+                </span>
+                <span className={`flex items-center space-x-1 ${tonometryStatus.color.split(' ')[0]}`}>
+                  <span className="w-2 h-2 rounded-full bg-current"></span>
+                  <span>TONO</span>
+                </span>
+              </div>
             </div>
           </div>
         </div>

@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { subscribeToDocumentPatients } from '@/utils/patientUtils';
 import PatientCard from '@/components/patient/PatientCard';
 
-export default function PatientSelector({ documentId, selectedPatient, onPatientSelect, onArchive }) {
+export default function PatientSelector({ documentId, selectedPatient, onPatientSelect }) {
   const [patients, setPatients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -94,7 +94,6 @@ export default function PatientSelector({ documentId, selectedPatient, onPatient
                 <PatientCard
                   patient={patient}
                   onClick={handlePatientClick}
-                  onArchive={onArchive}
                 />
               </div>
             ))}

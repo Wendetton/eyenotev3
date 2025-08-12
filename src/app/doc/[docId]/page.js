@@ -2,13 +2,13 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { doc, onSnapshot, setDoc, updateDoc, getDoc, collection, deleteDoc, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
+import { doc, onSnapshot, setDoc, updateDoc, collection, deleteDoc, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import ProfileSelector from '@/components/common/ProfileSelector';
 import PatientSelector from '@/components/doctor/PatientSelector';
 import PatientCreationForm from '@/components/assistant/PatientCreationForm';
 import ExamViewer from '@/components/doctor/ExamViewer';
-import { getPatients, subscribeToDocumentPatients, archivePatient, createPatient } from '@/utils/patientUtils';
+import { getPatients, subscribeToDocumentPatients, archivePatient } from '@/utils/patientUtils';
 import PatientCard from '@/components/patient/PatientCard';
 import ArchivedPatients from '@/components/common/ArchivedPatients';
 
@@ -174,18 +174,6 @@ export default function DocumentPage() {
             annotations: typeof data.annotations === 'string' ? data.annotations : initialDocumentData.annotations, 
         };
         setDocumentData(currentData);
-        
-        // Sincronizar seleção de paciente entre usuários
-        if (data.selectedPatientId && data.selectedBy !== userName) {
-          // Buscar dados do paciente selecionado por outro usuário
-          if (data.selectedPatientId !== selectedPatient?.id) {
-            const syncPatient = {
-              id: data.selectedPatientId,
-              name: data.selectedPatientName || 'Paciente Selecionado'
-            };
-            setSelectedPatient(syncPatient);
-          }
-        }
       } else {
         setDoc(docRef, initialDocumentData).then(() => {
           setDocumentData(initialDocumentData);
@@ -237,31 +225,9 @@ export default function DocumentPage() {
 
   const updateDocInFirestore = async (updates) => {
     if (!docId) return;
-    
-    // Se há paciente selecionado, salvar dados específicos do paciente
-    if (selectedPatient && (updates.rightEye || updates.leftEye || updates.addition || updates.annotations)) {
-      const patientDocRef = doc(db, 'documents', docId, 'patients', selectedPatient.id);
-      try { 
-        await updateDoc(patientDocRef, updates); 
-      } catch (error) { 
-        // Se documento do paciente não existe, criar
-        try {
-          await setDoc(patientDocRef, {
-            patientId: selectedPatient.id,
-            patientName: selectedPatient.name,
-            createdAt: serverTimestamp(),
-            ...updates
-          });
-        } catch (createError) {
-          console.error("Erro ao criar documento do paciente:", createError);
-        }
-      }
-    } else {
-      // Para dados globais do documento (seleção de paciente, etc.)
-      const docRef = doc(db, 'documents', docId);
-      try { await updateDoc(docRef, updates); }
-      catch (error) { console.error("Erro ao atualizar documento:", error); }
-    }
+    const docRef = doc(db, 'documents', docId);
+    try { await updateDoc(docRef, updates); }
+    catch (error) { console.error("Erro ao atualizar documento:", error); }
   };
 
   const updateField = (path, value) => {
@@ -369,27 +335,9 @@ export default function DocumentPage() {
   const handlePatientSelect = async (patient) => {
     setSelectedPatient(patient);
     
-    // Carregar dados específicos do paciente
+    // Sincronizar seleção de paciente no documento para outros usuários
     if (patient) {
       try {
-        const patientDocRef = doc(db, 'documents', docId, 'patients', patient.id);
-        const patientDoc = await getDoc(patientDocRef);
-        
-        if (patientDoc.exists()) {
-          const patientData = patientDoc.data();
-          // Carregar dados específicos do paciente
-          setDocumentData({
-            rightEye: patientData.rightEye || initialDocumentData.rightEye,
-            leftEye: patientData.leftEye || initialDocumentData.leftEye,
-            addition: patientData.addition || initialDocumentData.addition,
-            annotations: patientData.annotations || initialDocumentData.annotations
-          });
-        } else {
-          // Se não há dados salvos, usar dados iniciais
-          setDocumentData(initialDocumentData);
-        }
-        
-        // Sincronizar seleção de paciente no documento para outros usuários
         await updateDocInFirestore({
           selectedPatientId: patient.id,
           selectedPatientName: patient.name,
@@ -397,27 +345,13 @@ export default function DocumentPage() {
           selectedAt: serverTimestamp()
         });
       } catch (error) {
-        console.error('Erro ao carregar dados do paciente:', error);
-        // Em caso de erro, usar dados iniciais
-        setDocumentData(initialDocumentData);
+        console.error('Erro ao sincronizar seleção de paciente:', error);
       }
     }
   };
 
-  const handleBackToPatients = async () => {
+  const handleBackToPatients = () => {
     setSelectedPatient(null);
-    
-    // Limpar seleção de paciente no documento para outros usuários
-    try {
-      await updateDocInFirestore({
-        selectedPatientId: null,
-        selectedPatientName: null,
-        selectedBy: null,
-        selectedAt: serverTimestamp()
-      });
-    } catch (error) {
-      console.error('Erro ao limpar seleção de paciente:', error);
-    }
   };
 
   const handleBackToProfile = () => {
@@ -441,113 +375,53 @@ export default function DocumentPage() {
     }
   };
 
-  const handleQuickCare = async () => {
-    try {
-      // Gerar número aleatório para o paciente
-      const randomNumber = Math.floor(Math.random() * 100000);
-      const quickPatientName = `Paciente #${randomNumber}`;
-      
-      // Criar paciente temporário para atendimento rápido
-      const quickPatient = {
-        id: `quick_${Date.now()}_${randomNumber}`,
-        name: quickPatientName,
-        status: 'active',
-        createdAt: new Date(),
-        documentId: docId,
-        isQuickCare: true, // Flag para identificar atendimento rápido
-        exams: {
-          ar: null,
-          tonometry: null
-        }
-      };
-
-      // Salvar paciente no Firestore para aparecer na lista
-      try {
-        await createPatient(quickPatient.name, docId, quickPatient.exams, quickPatient.id);
-        console.log('Paciente de atendimento rápido criado no Firestore');
-      } catch (error) {
-        console.error('Erro ao salvar paciente no Firestore:', error);
-      }
-
-      // Selecionar o paciente temporário (isso sincroniza automaticamente)
-      await handlePatientSelect(quickPatient);
-      
-    } catch (error) {
-      console.error('Erro ao iniciar atendimento rápido:', error);
-      alert('Erro ao iniciar atendimento rápido');
-    }
-  };
-
-  // Modal de Pacientes Arquivados - GLOBAL para todos os contextos
-  const renderArchivedModal = () => {
-    if (!showArchivedPatients) return null;
-    
-    return (
-      <ArchivedPatients
-        documentId={docId}
-        onClose={() => setShowArchivedPatients(false)}
-      />
-    );
-  };
-
-  // Loading
   if (loading || !documentData) {
     return (
-      <>
-        <div className="flex justify-center items-center h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-            <p className="text-gray-600">Carregando documento...</p>
-          </div>
+      <div className="flex justify-center items-center h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Carregando documento...</p>
         </div>
-        {renderArchivedModal()}
-      </>
+      </div>
     );
   }
 
-  // Sem docId
   if (!docId) {
     return (
-      <>
-        <div className="flex justify-center items-center h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
-          <div className="text-center">
-            <p className="text-red-600 text-lg">ID do documento não fornecido.</p>
-            <button 
-              onClick={() => router.push('/')}
-              className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-            >
-              Voltar ao Início
-            </button>
-          </div>
+      <div className="flex justify-center items-center h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+        <div className="text-center">
+          <p className="text-red-600 text-lg">ID do documento não fornecido.</p>
+          <button 
+            onClick={() => router.push('/')}
+            className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+          >
+            Voltar ao Início
+          </button>
         </div>
-        {renderArchivedModal()}
-      </>
+      </div>
     );
   }
 
-  // Seleção de perfil
+  // Se não selecionou perfil ainda
   if (!userProfile) {
     return (
-      <>
-        <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
-          <div className="container mx-auto p-4">
-            <div className="text-center mb-8 pt-8">
-              <h1 className="text-4xl font-bold mb-2 text-gray-800">Eyenote</h1>
-              <p className="text-gray-600">Documento: {docId}</p>
-              <p className="text-sm text-gray-500 mt-2">
-                Usuário: <span style={{ color: userColor, fontWeight: 'bold' }}>{userName}</span>
-              </p>
-            </div>
-            <ProfileSelector 
-              onProfileSelect={handleProfileSelect} 
-              documentId={docId}
-              userName={userName}
-              userColor={userColor}
-            />
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+        <div className="container mx-auto p-4">
+          <div className="text-center mb-8 pt-8">
+            <h1 className="text-4xl font-bold mb-2 text-gray-800">Eyenote</h1>
+            <p className="text-gray-600">Documento: {docId}</p>
+            <p className="text-sm text-gray-500 mt-2">
+              Usuário: <span style={{ color: userColor, fontWeight: 'bold' }}>{userName}</span>
+            </p>
           </div>
+          <ProfileSelector 
+            onProfileSelect={handleProfileSelect} 
+            documentId={docId}
+            userName={userName}
+            userColor={userColor}
+          />
         </div>
-        {renderArchivedModal()}
-      </>
+      </div>
     );
   }
 
@@ -578,7 +452,6 @@ export default function DocumentPage() {
               onPatientCreated={handlePatientCreated}
             />
           </div>
-          {renderArchivedModal()}
         </div>
       );
     }
@@ -662,7 +535,6 @@ export default function DocumentPage() {
             </div>
           </div>
         </div>
-        {renderArchivedModal()}
       </div>
     );
   }
@@ -690,32 +562,19 @@ export default function DocumentPage() {
                   Usuário: <span style={{ color: userColor, fontWeight: 'bold' }}>{userName}</span>
                 </p>
               </div>
-              <div className="flex space-x-3">
-                <button
-                  onClick={() => setShowArchivedPatients(true)}
-                  className="bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-2 rounded-md text-sm font-medium"
-                >
-                  Ver Arquivados
-                </button>
-                <button
-                  onClick={handleQuickCare}
-                  className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium flex items-center"
-                >
-                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                  </svg>
-                  Atendimento Rápido
-                </button>
-              </div>
+              <button
+                onClick={() => setShowArchivedPatients(true)}
+                className="bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-2 rounded-md text-sm font-medium"
+              >
+                Ver Arquivados
+              </button>
             </div>
             <PatientSelector 
               documentId={docId}
               selectedPatient={selectedPatient}
               onPatientSelect={handlePatientSelect}
-              onArchive={handleArchivePatient}
             />
           </div>
-          {renderArchivedModal()}
         </div>
       );
     }
@@ -738,12 +597,7 @@ export default function DocumentPage() {
               <div>
                 <h1 className="text-3xl font-bold text-gray-800">EyeNote</h1>
                 <p className="text-sm text-gray-600">
-                  Paciente: <span className="font-semibold">{selectedPatient.name}</span>
-                  {selectedPatient.isQuickCare && (
-                    <span className="ml-2 px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">
-                      Atendimento Rápido
-                    </span>
-                  )} | 
+                  Paciente: <span className="font-semibold">{selectedPatient.name}</span> | 
                   Documento: {docId} | 
                   Editando como: <span style={{ color: userColor, fontWeight: 'bold' }}>{userName}</span>
                 </p>
@@ -835,12 +689,6 @@ export default function DocumentPage() {
                 >
                   {copyStatus || 'Copiar para Tabela'}
                 </button>
-                <button 
-                  onClick={() => handleArchivePatient(selectedPatient.id)} 
-                  className="px-6 py-2 bg-yellow-600 hover:bg-yellow-700 text-white font-semibold rounded-md shadow-sm transition duration-150 ease-in-out focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:ring-opacity-50"
-                >
-                  Arquivar Paciente
-                </button>
               </div>
               {copyStatus && (
                 <p className="text-sm text-gray-600 mt-2">
@@ -873,11 +721,28 @@ export default function DocumentPage() {
         <footer className="mt-8 text-center text-sm text-gray-500 py-4 border-t border-gray-200">
           As alterações são salvas automaticamente.
         </footer>
-        {renderArchivedModal()}
+
+        {/* Modal de Pacientes Arquivados */}
+        {showArchivedPatients && (
+          <ArchivedPatients
+            documentId={docId}
+            onClose={() => setShowArchivedPatients(false)}
+          />
+        )}
       </div>
     );
   }
 
-  return null;
+  // Adicionar modal de pacientes arquivados para todos os perfis
+  return (
+    <>
+      {showArchivedPatients && (
+        <ArchivedPatients
+          documentId={docId}
+          onClose={() => setShowArchivedPatients(false)}
+        />
+      )}
+    </>
+  );
 }
 
