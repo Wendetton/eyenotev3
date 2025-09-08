@@ -3,6 +3,13 @@
 import { useState } from 'react';
 import ImageModal from '@/components/common/ImageModal';
 
+/**
+ * ExamViewer
+ * - Exibe imagem INTEGRAL no próprio box (sem necessidade de clique)
+ * - Mantém o modal para zoom/pan quando o usuário quiser ampliar
+ * - Corrige comportamento em iPad/iOS: usa svh para viewport estável
+ * - Não altera Firestore nem a colaboração em tempo real
+ */
 export default function ExamViewer({ patient }) {
   const [selectedExam, setSelectedExam] = useState('ar');
   const [showModal, setShowModal] = useState(false);
@@ -29,7 +36,7 @@ export default function ExamViewer({ patient }) {
     if (exam?.uploaded && exam?.url) {
       setModalImage({
         url: exam.url,
-        title: patient.name,
+        title: patient.name || 'Exame',
         examType: examType
       });
       setShowModal(true);
@@ -55,6 +62,44 @@ export default function ExamViewer({ patient }) {
 
   const arStatus = getExamStatus(arExam);
   const tonometryStatus = getExamStatus(tonometryExam);
+
+  const ImageBox = ({ exam, alt, onClick }) => {
+    if (!exam?.uploaded || !exam?.url) {
+      return (
+        <div className="p-6 text-center text-gray-500 bg-gray-50 rounded-lg border">
+          Nenhuma imagem enviada.
+        </div>
+      );
+    }
+
+    // Preferir renderização nítida em telas retina, sem cortar
+    const thumb = exam?.metadata?.thumbnailUrl || exam.url;
+
+    return (
+      <div
+        className="relative w-full rounded-lg overflow-hidden bg-gray-50 cursor-pointer group"
+        onClick={onClick}
+        aria-label="Abrir imagem em tela cheia"
+      >
+        <img
+          src={exam.url}
+          srcSet={`${thumb} 480w, ${exam.url} 1280w, ${exam.url} 1920w`}
+          sizes="(max-width: 1280px) 100vw, 33vw"
+          alt={alt}
+          loading="lazy"
+          decoding="async"
+          className="w-full h-auto max-h-[70svh] md:max-h-[75vh] object-contain select-none"
+          onError={(e) => {
+            e.currentTarget.src = exam.url;
+          }}
+          style={{ WebkitUserSelect: 'none', userSelect: 'none' }}
+        />
+        <div className="absolute top-2 left-2 text-[10px] px-2 py-1 rounded bg-black/60 text-white opacity-80 group-hover:opacity-100 transition-opacity">
+          Toque para ampliar
+        </div>
+      </div>
+    );
+  };
 
   return (
     <>
@@ -108,90 +153,25 @@ export default function ExamViewer({ patient }) {
           </div>
         </div>
 
-        {/* Renderização do exame selecionado (IMAGEM INTEGRAL NO BOX) */}
+        {/* Renderização do exame selecionado: imagem integral no box */}
         <div className="space-y-6">
           {selectedExam === 'ar' ? (
-            <div className="space-y-3">
-              {arExam?.uploaded ? (
-                <div
-                  className="relative bg-gray-100 rounded-lg overflow-hidden cursor-pointer hover:bg-gray-200 transition-colors group"
-                  onClick={() => handleImageClick('ar')}
-                  aria-label="Abrir AR em tela cheia"
-                >
-                  <img
-                    src={arExam.url}
-                    srcSet={`${arExam?.metadata?.thumbnailUrl || arExam.url} 480w, ${arExam.url} 1920w`}
-                    sizes="(max-width: 1024px) 100vw, 25vw"
-                    alt="Exame AR"
-                    loading="lazy"
-                    decoding="async"
-                    className="w-full max-h-[70vh] object-contain rounded-md bg-gray-50"
-                    onError={(e) => {
-                      e.currentTarget.src = arExam.url; // Fallback
-                    }}
-                  />
-                  {/* etiqueta superior opcional */}
-                  <div className="absolute top-2 left-2 text-[10px] px-2 py-1 rounded bg-black/60 text-white">
-                    Clique para ampliar
-                  </div>
-                </div>
-              ) : (
-                <div className="p-6 text-center text-gray-500 bg-gray-50 rounded-lg border">
-                  Nenhuma imagem de AR enviada.
-                </div>
-              )}
-            </div>
+            <ImageBox
+              exam={arExam}
+              alt="Exame de Autorrefração"
+              onClick={() => handleImageClick('ar')}
+            />
           ) : (
-            <div className="space-y-3">
-              {tonometryExam?.uploaded ? (
-                <div
-                  className="relative bg-gray-100 rounded-lg overflow-hidden cursor-pointer hover:bg-gray-200 transition-colors group"
-                  onClick={() => handleImageClick('tonometry')}
-                  aria-label="Abrir Tonometria em tela cheia"
-                >
-                  <img
-                    src={tonometryExam.url}
-                    srcSet={`${tonometryExam?.metadata?.thumbnailUrl || tonometryExam.url} 480w, ${tonometryExam.url} 1920w`}
-                    sizes="(max-width: 1024px) 100vw, 25vw"
-                    alt="Exame Tonometria"
-                    loading="lazy"
-                    decoding="async"
-                    className="w-full max-h-[70vh] object-contain rounded-md bg-gray-50"
-                    onError={(e) => {
-                      e.currentTarget.src = tonometryExam.url; // Fallback
-                    }}
-                  />
-                  <div className="absolute top-2 left-2 text-[10px] px-2 py-1 rounded bg-black/60 text-white">
-                    Clique para ampliar
-                  </div>
-                </div>
-              ) : (
-                <div className="p-6 text-center text-gray-500 bg-gray-50 rounded-lg border">
-                  Nenhuma imagem de Tonometria enviada.
-                </div>
-              )}
-            </div>
+            <ImageBox
+              exam={tonometryExam}
+              alt="Exame de Tonometria"
+              onClick={() => handleImageClick('tonometry')}
+            />
           )}
-        </div>
-
-        {/* Rodapé/resumo */}
-        <div className="mt-6 text-xs text-gray-500">
-          <div className="flex items-center justify-between">
-            <span className="flex items-center space-x-2">
-              <span className={`flex items-center space-x-1 ${arStatus.color.split(' ')[0]}`}>
-                <span className="w-2 h-2 rounded-full bg-current"></span>
-                <span>AR</span>
-              </span>
-              <span className={`flex items-center space-x-1 ${tonometryStatus.color.split(' ')[0]}`}>
-                <span className="w-2 h-2 rounded-full bg-current"></span>
-                <span>TONO</span>
-              </span>
-            </span>
-          </div>
         </div>
       </div>
 
-      {/* Modal ainda disponível para zoom/pan */}
+      {/* Modal de zoom/pan (opcional) */}
       <ImageModal
         isOpen={showModal}
         onClose={() => setShowModal(false)}
