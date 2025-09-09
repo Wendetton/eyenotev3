@@ -2,48 +2,85 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import ImageModal from '@/components/common/ImageModal';
+import { db } from '@/lib/firebase';
+import { doc, onSnapshot } from 'firebase/firestore';
 
 /**
- * ExamViewer (layout-only + sticky URL)
- * - SOMENTE layout: não grava nada, não muda lógica de dados.
- * - Mostra a imagem integral no box (object-contain) com altura estável no iPad (svh).
- * - "Sticky URL": mantém a última URL válida localmente para evitar piscar/sumir
- *   quando o snapshot chegar momentaneamente sem 'url'.
+ * ExamViewer — robusto para sessão compartilhada
+ * - NÃO altera Firestore: somente leitura (assina patients/{id} na raiz)
+ * - Quando a ficha abrir "remotamente" em outro device, o componente
+ *   busca os 'exams' na raiz e MESCLA com o que veio pelo paciente prop.
+ * - "Sticky URL": não limpa a imagem se o snapshot vier temporariamente sem 'url'.
+ * - Layout: imagem integral (object-contain) com altura estável no iPad (svh).
  */
 export default function ExamViewer({ patient }) {
   const [selectedExam, setSelectedExam] = useState('ar'); // 'ar' | 'tonometry'
   const [showModal, setShowModal] = useState(false);
   const [modalImage, setModalImage] = useState(null);
 
-  // Refs/estado "grudados" (sticky) das URLs dos exames
+  // Exames vindos diretamente da raiz (patients/{id}), em tempo real
+  const [rootExams, setRootExams] = useState(null);
+
+  // Sticky URL por exame (evita "piscadas" e sumiços entre devices)
   const [displayedArUrl, setDisplayedArUrl] = useState(null);
   const [displayedTonoUrl, setDisplayedTonoUrl] = useState(null);
-
   const prevArUrlRef = useRef(null);
   const prevTonoUrlRef = useRef(null);
 
-  const exams = patient?.exams || {};
-  const arExam = exams?.ar || null;
-  const tonoExam = exams?.tonometry || null;
+  const patientId = patient?.id || null;
+  const propExams = patient?.exams || {};
 
-  // Atualiza "sticky" quando chegar uma URL válida; ignora nulos temporários
+  // Assina a raiz para garantir que temos 'exams' completos mesmo quando a ficha
+  // abre "de fora" (sincronização de sessão) e as props não trazem as URLs.
   useEffect(() => {
-    const next = arExam?.url || null;
+    if (!patientId) {
+      setRootExams(null);
+      return;
+    }
+    const unsub = onSnapshot(doc(db, 'patients', patientId), (snap) => {
+      const data = snap.exists() ? snap.data() : null;
+      setRootExams(data?.exams || null);
+    });
+    return () => unsub && unsub();
+  }, [patientId]);
+
+  // Normalização defensiva
+  const ensureExam = (exam) => {
+    if (!exam) return { uploaded: false, url: null, uploadedAt: null, metadata: null };
+    const { uploaded = !!exam.url, url = null, uploadedAt = null, metadata = null } = exam;
+    return { uploaded, url, uploadedAt, metadata };
+  };
+
+  // Mescla exames: prioridade para o que tiver URL (geralmente raiz chega mais completo)
+  const mergedExams = useMemo(() => {
+    const ar = ensureExam(propExams?.ar);
+    const to = ensureExam(propExams?.tonometry);
+    const rootAr = ensureExam(rootExams?.ar);
+    const rootTo = ensureExam(rootExams?.tonometry);
+
+    return {
+      ar: rootAr.url ? rootAr : ar.url ? ar : rootAr,             // prioriza quem tem URL
+      tonometry: rootTo.url ? rootTo : to.url ? to : rootTo,
+    };
+  }, [propExams?.ar, propExams?.tonometry, rootExams?.ar, rootExams?.tonometry]);
+
+  // Atualiza sticky para AR quando aparecer uma URL válida
+  useEffect(() => {
+    const next = mergedExams.ar?.url || null;
     if (next && next !== prevArUrlRef.current) {
       prevArUrlRef.current = next;
       setDisplayedArUrl(next);
     } else if (!displayedArUrl && next) {
-      // Inicializar na primeira vez
       prevArUrlRef.current = next;
       setDisplayedArUrl(next);
     }
-    // Se next for nulo e já temos displayedArUrl, NÃO limpamos (sticky)
-    // Assim evitamos sumiço ao receber snapshots intermediários sem url
+    // não limpamos se vier null; mantemos sticky
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [arExam?.url]);
+  }, [mergedExams.ar?.url]);
 
+  // Atualiza sticky para Tonometria quando aparecer uma URL válida
   useEffect(() => {
-    const next = tonoExam?.url || null;
+    const next = mergedExams.tonometry?.url || null;
     if (next && next !== prevTonoUrlRef.current) {
       prevTonoUrlRef.current = next;
       setDisplayedTonoUrl(next);
@@ -52,7 +89,7 @@ export default function ExamViewer({ patient }) {
       setDisplayedTonoUrl(next);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tonoExam?.url]);
+  }, [mergedExams.tonometry?.url]);
 
   const handleOpenModal = (url, title, examType) => {
     if (!url) return;
@@ -61,13 +98,10 @@ export default function ExamViewer({ patient }) {
   };
 
   const statusChip = (hasUrl) =>
-    hasUrl
-      ? 'text-green-700 bg-green-50'
-      : 'text-gray-600 bg-gray-100';
+    hasUrl ? 'text-green-700 bg-green-50' : 'text-gray-600 bg-gray-100';
 
-  const ImageBlock = ({ label, examType, stickyUrl, rawExam }) => {
-    // prioridade: stickyUrl (última válida) > url atual (se existir)
-    const liveUrl = rawExam?.url || null;
+  const ImageBlock = ({ label, examType, stickyUrl, liveUrl }) => {
+    // prioridade: stickyUrl (última válida) > liveUrl atual
     const url = stickyUrl || liveUrl || null;
 
     return (
@@ -94,8 +128,9 @@ export default function ExamViewer({ patient }) {
               style={{
                 WebkitUserSelect: 'none',
                 userSelect: 'none',
-                contain: 'content',         // reduz reflows (ajuda a evitar “piscadas”)
-                backfaceVisibility: 'hidden'
+                contain: 'content',
+                backfaceVisibility: 'hidden',
+                transform: 'translateZ(0)', // ajuda a estabilizar no Safari
               }}
               onError={(e) => {
                 // Mantém a última imagem boa; se falhar, não limpa a tela
@@ -133,7 +168,7 @@ export default function ExamViewer({ patient }) {
         <h2 className="text-xl font-semibold mb-4 text-gray-700">Exames do Paciente</h2>
         <p className="text-sm text-gray-600 mb-4">{patient?.name}</p>
 
-        {/* Seletor simples (local) */}
+        {/* Seletor local */}
         <div className="flex space-x-2 mb-6">
           <button
             onClick={() => setSelectedExam('ar')}
@@ -147,7 +182,7 @@ export default function ExamViewer({ patient }) {
             AR
           </button>
 
-          <button
+        <button
             onClick={() => setSelectedExam('tonometry')}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
               selectedExam === 'tonometry'
@@ -160,21 +195,21 @@ export default function ExamViewer({ patient }) {
           </button>
         </div>
 
-        {/* Renderização do exame selecionado (com sticky URL) */}
+        {/* Renderização do exame selecionado (merge + sticky) */}
         <div className="space-y-6">
           {selectedExam === 'ar' ? (
             <ImageBlock
               label="Autorrefrator"
               examType="ar"
               stickyUrl={displayedArUrl}
-              rawExam={arExam}
+              liveUrl={mergedExams.ar?.url || null}
             />
           ) : (
             <ImageBlock
               label="Tonometria"
               examType="tonometry"
               stickyUrl={displayedTonoUrl}
-              rawExam={tonoExam}
+              liveUrl={mergedExams.tonometry?.url || null}
             />
           )}
         </div>
