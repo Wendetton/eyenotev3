@@ -15,6 +15,29 @@ import {
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 
+// --- Normalização de paciente/exames para robustez cross-device ---
+const ensureExam = (exam) => {
+  if (!exam) {
+    return { uploaded: false, url: null, uploadedAt: null, metadata: null };
+  }
+  // Garantir chaves mínimas mesmo quando veio parcial
+  const { uploaded = !!exam.url, url = null, uploadedAt = null, metadata = null } = exam;
+  return { uploaded, url, uploadedAt, metadata };
+};
+
+const normalizePatient = (p) => {
+  if (!p) return p;
+  const exams = p.exams || {};
+  return {
+    ...p,
+    exams: {
+      ar: ensureExam(exams.ar),
+      tonometry: ensureExam(exams.tonometry),
+    },
+  };
+};
+
+
 // Gerar ID único para paciente
 export const generatePatientId = () => {
   return Math.random().toString(36).substring(2, 15) + Date.now().toString(36);
@@ -72,25 +95,21 @@ export const createPatient = async (patientName, documentId, exams = null, custo
 };
 
 // Obter todos os pacientes de um documento específico (SEM orderBy para evitar erro de índice)
-export const getPatients = async (documentId, status = 'active') => {
-  console.log('🔧 [DEBUG] getPatients chamada para documento:', documentId, 'status:', status);
-  
+export const getPatientsByDocument = async (documentId) => {
   try {
     const patientsRef = collection(db, 'patients');
     const q = query(
       patientsRef, 
       where('documentId', '==', documentId),
-      where('status', '==', status)
+      where('status', '==', 'active')
       // REMOVIDO: orderBy('createdAt', 'desc') - causa erro de índice
     );
-    const querySnapshot = await getDocs(q);
     
+    const querySnapshot = await getDocs(q);
     const patients = [];
     querySnapshot.forEach((doc) => {
-      patients.push({ id: doc.id, ...doc.data() });
+      patients.push(normalizePatient({ id: doc.id, ...doc.data() }));
     });
-    
-    console.log('🔧 [DEBUG] Pacientes encontrados:', patients.length, patients);
     
     // Ordenar no cliente para evitar erro de índice
     patients.sort((a, b) => {
@@ -99,18 +118,15 @@ export const getPatients = async (documentId, status = 'active') => {
       return timeB - timeA; // Mais recente primeiro
     });
     
-    console.log('🔧 [DEBUG] Pacientes ordenados:', patients);
     return patients;
   } catch (error) {
-    console.error('❌ [ERROR] Erro ao buscar pacientes do documento:', error);
+    console.error('❌ [ERROR] Erro ao obter pacientes por documento:', error);
     throw error;
   }
 };
 
 // Buscar todos os pacientes ativos (SEM orderBy)
 export const getActivePatients = async () => {
-  console.log('🔧 [DEBUG] getActivePatients chamada');
-  
   try {
     const patientsRef = collection(db, 'patients');
     const q = query(
@@ -118,14 +134,12 @@ export const getActivePatients = async () => {
       where('status', '==', 'active')
       // REMOVIDO: orderBy('createdAt', 'desc')
     );
-    const querySnapshot = await getDocs(q);
     
+    const querySnapshot = await getDocs(q);
     const patients = [];
     querySnapshot.forEach((doc) => {
-      patients.push({ id: doc.id, ...doc.data() });
+      patients.push(normalizePatient({ id: doc.id, ...doc.data() }));
     });
-    
-    console.log('🔧 [DEBUG] Pacientes ativos encontrados:', patients.length);
     
     // Ordenar no cliente
     patients.sort((a, b) => {
@@ -136,7 +150,7 @@ export const getActivePatients = async () => {
     
     return patients;
   } catch (error) {
-    console.error('❌ [ERROR] Erro ao buscar pacientes ativos:', error);
+    console.error('❌ [ERROR] Erro ao obter pacientes ativos:', error);
     throw error;
   }
 };
@@ -150,11 +164,11 @@ export const getArchivedPatients = async () => {
       where('status', '==', 'archived')
       // REMOVIDO: orderBy('updatedAt', 'desc')
     );
-    const querySnapshot = await getDocs(q);
     
+    const querySnapshot = await getDocs(q);
     const patients = [];
     querySnapshot.forEach((doc) => {
-      patients.push({ id: doc.id, ...doc.data() });
+      patients.push(normalizePatient({ id: doc.id, ...doc.data() }));
     });
     
     // Ordenar no cliente
@@ -166,7 +180,7 @@ export const getArchivedPatients = async () => {
     
     return patients;
   } catch (error) {
-    console.error('❌ [ERROR] Erro ao buscar pacientes arquivados:', error);
+    console.error('❌ [ERROR] Erro ao obter pacientes arquivados:', error);
     throw error;
   }
 };
@@ -175,29 +189,28 @@ export const getArchivedPatients = async () => {
 export const getPatientById = async (patientId) => {
   try {
     const patientRef = doc(db, 'patients', patientId);
-    const patientSnap = await getDoc(patientRef);
+    const docSnap = await getDoc(patientRef);
     
-    if (patientSnap.exists()) {
-      return { id: patientSnap.id, ...patientSnap.data() };
+    if (docSnap.exists()) {
+      return normalizePatient({ id: docSnap.id, ...docSnap.data() });
     } else {
-      throw new Error('Paciente não encontrado');
+      console.warn('⚠️ [WARN] Paciente não encontrado:', patientId);
+      return null;
     }
   } catch (error) {
-    console.error('❌ [ERROR] Erro ao buscar paciente:', error);
+    console.error('❌ [ERROR] Erro ao obter paciente por ID:', error);
     throw error;
   }
 };
 
 // Atualizar dados do paciente
-export const updatePatient = async (patientId, updateData) => {
+export const updatePatient = async (patientId, updatedData) => {
   try {
     const patientRef = doc(db, 'patients', patientId);
-    const dataToUpdate = {
-      ...updateData,
+    await updateDoc(patientRef, {
+      ...updatedData,
       updatedAt: serverTimestamp()
-    };
-    
-    await updateDoc(patientRef, dataToUpdate);
+    });
     return true;
   } catch (error) {
     console.error('❌ [ERROR] Erro ao atualizar paciente:', error);
@@ -266,7 +279,7 @@ export const subscribeToDocumentPatients = (documentId, callback) => {
     querySnapshot.forEach((doc) => {
       const patientData = { id: doc.id, ...doc.data() };
       console.log('🔧 [DEBUG] Paciente encontrado:', patientData);
-      patients.push(patientData);
+      patients.push(normalizePatient(patientData));
     });
     
     // Ordenar no cliente
@@ -281,7 +294,7 @@ export const subscribeToDocumentPatients = (documentId, callback) => {
   }, (error) => {
     console.error('❌ [ERROR] Erro no listener de pacientes:', error);
   });
-};
+}
 
 // Listener em tempo real para pacientes ativos (SEM orderBy)
 export const subscribeToActivePatients = (callback) => {
@@ -295,7 +308,7 @@ export const subscribeToActivePatients = (callback) => {
   return onSnapshot(q, (querySnapshot) => {
     const patients = [];
     querySnapshot.forEach((doc) => {
-      patients.push({ id: doc.id, ...doc.data() });
+      patients.push(normalizePatient({ id: doc.id, ...doc.data() }));
     });
     
     // Ordenar no cliente
@@ -307,7 +320,7 @@ export const subscribeToActivePatients = (callback) => {
     
     callback(patients);
   });
-};
+}
 
 // Listener em tempo real para um paciente específico
 export const subscribeToPatient = (patientId, callback) => {
@@ -315,12 +328,12 @@ export const subscribeToPatient = (patientId, callback) => {
   
   return onSnapshot(patientRef, (doc) => {
     if (doc.exists()) {
-      callback({ id: doc.id, ...doc.data() });
+      callback(normalizePatient({ id: doc.id, ...doc.data() }));
     } else {
       callback(null);
     }
   });
-};
+}
 
 // Atualizar status do exame
 export const updateExamStatus = async (patientId, examType, examData) => {
@@ -351,13 +364,16 @@ export const formatRelativeTime = (timestamp) => {
   
   const now = new Date();
   const time = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
-  const diffInMinutes = Math.floor((now - time) / (1000 * 60));
+  const diffInMs = now - time;
   
-  if (diffInMinutes < 1) return 'Agora mesmo';
+  const diffInSeconds = Math.floor(diffInMs / 1000);
+  if (diffInSeconds < 60) return 'Agora mesmo';
+  
+  const diffInMinutes = Math.floor(diffInSeconds / 60);
   if (diffInMinutes < 60) return `há ${diffInMinutes} min`;
   
   const diffInHours = Math.floor(diffInMinutes / 60);
-  if (diffInHours < 24) return `há ${diffInHours}h`;
+  if (diffInHours < 24) return `há ${diffInHours} h`;
   
   const diffInDays = Math.floor(diffInHours / 24);
   return `há ${diffInDays} dias`;
@@ -365,11 +381,14 @@ export const formatRelativeTime = (timestamp) => {
 
 // Verificar se todos os exames foram enviados
 export const hasAllExams = (patient) => {
-  return patient.exams?.ar?.uploaded && patient.exams?.tonometry?.uploaded;
+  const ar = patient.exams?.ar;
+  const to = patient.exams?.tonometry;
+  return (!!ar?.uploaded || !!ar?.url) && (!!to?.uploaded || !!to?.url);
 };
 
 // Verificar se pelo menos um exame foi enviado
 export const hasAnyExam = (patient) => {
-  return patient.exams?.ar?.uploaded || patient.exams?.tonometry?.uploaded;
+  const ar = patient.exams?.ar;
+  const to = patient.exams?.tonometry;
+  return (!!ar?.uploaded || !!ar?.url) || (!!to?.uploaded || !!to?.url);
 };
-
