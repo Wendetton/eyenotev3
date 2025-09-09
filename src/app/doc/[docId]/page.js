@@ -176,17 +176,21 @@ export default function DocumentPage() {
         };
         setDocumentData(currentData);
         
-        // Sincronizar seleção de paciente entre usuários
-        if (data.selectedPatientId && data.selectedBy !== userName) {
-          // Buscar dados do paciente selecionado por outro usuário
-          if (data.selectedPatientId !== selectedPatient?.id) {
-            const syncPatient = {
-              id: data.selectedPatientId,
-              name: data.selectedPatientName || 'Paciente Selecionado'
-            };
-            setSelectedPatient(syncPatient);
-          }
-        }
+                // Sincronizar seleção de paciente entre usuários
+            if (data.selectedPatientId && data.selectedBy !== userName) {
+              // Buscar dados do paciente selecionado por outro usuário
+              if (data.selectedPatientId !== selectedPatient?.id) {
+                const syncPatient = {
+                  id: data.selectedPatientId,
+                  name: data.selectedPatientName || 'Paciente Selecionado',
+                };
+                setSelectedPatient(syncPatient);
+              }
+            } else if (!data.selectedPatientId && selectedPatient) {
+              // Se a seleção foi limpa por outro usuário, voltar para a lista
+              setSelectedPatient(null);
+            }
+        
       } else {
         setDoc(docRef, initialDocumentData).then(() => {
           setDocumentData(initialDocumentData);
@@ -432,15 +436,25 @@ export default function DocumentPage() {
     // Não precisa recarregar - o listener em tempo real já atualiza automaticamente
   };
 
-  const handleArchivePatient = async (patientId) => {
-    try {
-      await archivePatient(patientId);
-      // O listener em tempo real já remove da lista automaticamente
-    } catch (error) {
-      console.error('Erro ao arquivar paciente:', error);
-      alert('Erro ao arquivar paciente');
+const handleArchivePatient = async (patientId) => {
+  try {
+    await archivePatient(patientId); // mantém seu util original
+
+    // Se o paciente arquivado estava selecionado neste doc, limpar seleção compartilhada
+    if (selectedPatient?.id === patientId) {
+      await updateDocInFirestore({
+        selectedPatientId: null,
+        selectedPatientName: null,
+        selectedBy: null,
+        selectedAt: serverTimestamp(),
+      });
+      setSelectedPatient(null);
     }
-  };
+  } catch (error) {
+    console.error('Erro ao arquivar paciente:', error);
+    alert('Erro ao arquivar paciente');
+  }
+};
 
   const handleQuickCare = async () => {
     try {
