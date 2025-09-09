@@ -1,0 +1,43 @@
+/* src/app/fullbleed.css */
+
+/* Garante plano de fundo claro em toda a tela */
+html, body {
+  background: #ffffff;
+}
+
+/* O contêiner "full-bleed" expande para 100% e neutraliza centralizações globais */
+.full-bleed {
+  width: 100vw;
+  min-height: 100vh;
+  background: #ffffff;
+}
+
+/* Dentro do full-bleed, desativa limites de largura comuns do Tailwind */
+.full-bleed :where(.container) {
+  max-width: none !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+}
+
+/* Neutraliza classes utilitárias de max-width (ex.: max-w-6xl, max-w-7xl, etc.) */
+.full-bleed :where([class*="max-w-"]) {
+  max-width: 100% !important;
+}
+
+/* Neutraliza centralização horizontal automática */
+.full-bleed :where(.mx-auto) {
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+}
+
+/* Evita scroll horizontal por algum filho com largura maior */
+.full-bleed {
+  overflow-x: hidden;
+}
+
+/* iOS: suaviza o “snap” da barra do navegador ao mostrar/ocultar */
+@supports (height: 100svh) {
+  .full-bleed {
+    min-height: 100svh;
+  }
+}
