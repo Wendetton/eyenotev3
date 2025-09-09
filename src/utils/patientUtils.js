@@ -1,324 +1,375 @@
-// src/utils/patientUtils.js
-// Utilitários de pacientes com leitura MESCLADA (raiz + documento) e escrita espelhada.
-// Resolve sumiço de imagem entre devices conectados em links diferentes (docId).
-
-import {
-  collection,
-  doc,
-  addDoc,
+import { 
+  collection, 
+  doc, 
+  addDoc, 
   setDoc,
-  updateDoc,
-  deleteDoc,
-  getDocs,
+  updateDoc, 
+  deleteDoc, 
+  getDocs, 
   getDoc,
   onSnapshot,
   query,
   where,
-  serverTimestamp,
+  orderBy,
+  serverTimestamp 
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 
-/* --------------------- Normalização & Merge --------------------- */
-
-const ensureExam = (exam) => {
-  if (!exam) return { uploaded: false, url: null, uploadedAt: null, metadata: null };
-  const { uploaded = !!exam.url, url = null, uploadedAt = null, metadata = null } = exam;
-  return { uploaded, url, uploadedAt, metadata };
+// Gerar ID único para paciente
+export const generatePatientId = () => {
+  return Math.random().toString(36).substring(2, 15) + Date.now().toString(36);
 };
 
-const normalizePatient = (p) => {
-  if (!p) return p;
-  const exams = p.exams || {};
-  return {
-    ...p,
-    id: p.id,
-    exams: {
-      ar: ensureExam(exams.ar),
-      tonometry: ensureExam(exams.tonometry),
-    },
-  };
-};
-
-// Mescla raso entre paciente do documento e da raiz.
-// - Campos do documento (escopo da sessão) têm precedência.
-// - 'exams' vem de qualquer um dos dois (o que estiver mais completo).
-const mergePatient = (docPatient, rootPatient) => {
-  const base = { ...(rootPatient || {}), ...(docPatient || {}) };
-  const exams =
-    (docPatient && docPatient.exams) ||
-    (rootPatient && rootPatient.exams) ||
-    undefined;
-  if (exams) base.exams = exams;
-  return normalizePatient(base);
-};
-
-/* --------------------- IDs e Criação --------------------- */
-
-export const generatePatientId = () =>
-  Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
-
+// Criar novo paciente
 export const createPatient = async (patientName, documentId, exams = null, customId = null) => {
-  const patientsRef = collection(db, 'patients');
-  const newPatient = {
-    name: patientName,
-    documentId: documentId || null, // vínculo com a sessão, quando existir
-    status: 'active',
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-    exams:
-      exams || {
-        ar: { uploaded: false, url: null, uploadedAt: null, metadata: null },
-        tonometry: { uploaded: false, url: null, uploadedAt: null, metadata: null },
-      },
-  };
+  console.log('🔧 [DEBUG] createPatient chamada com:', { patientName, documentId, exams, customId });
+  
+  try {
+    const patientsRef = collection(db, 'patients');
+    const newPatient = {
+      name: patientName,
+      documentId, // Vincular ao documento
+      status: 'active',
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+      exams: exams || {
+        ar: {
+          uploaded: false,
+          url: null,
+          uploadedAt: null,
+          metadata: null
+        },
+        tonometry: {
+          uploaded: false,
+          url: null,
+          uploadedAt: null,
+          metadata: null
+        }
+      }
+    };
 
-  let docRef;
-  if (customId) {
-    docRef = doc(patientsRef, customId);
-    await setDoc(docRef, newPatient, { merge: true });
-  } else {
-    docRef = await addDoc(patientsRef, newPatient);
-  }
+    console.log('🔧 [DEBUG] Dados do paciente a serem salvos:', newPatient);
 
-  return { id: docRef.id, ...newPatient };
-};
-
-/* --------------------- Leituras por consulta (não reativas) --------------------- */
-
-export const getPatientsByDocument = async (documentId) => {
-  const patientsRef = collection(db, 'patients');
-  const q = query(patientsRef, where('documentId', '==', documentId), where('status', '==', 'active'));
-  const snap = await getDocs(q);
-  const arr = [];
-  snap.forEach((d) => arr.push(normalizePatient({ id: d.id, ...d.data() })));
-
-  // ordenar por createdAt desc (no cliente)
-  arr.sort((a, b) => {
-    const aT = a.createdAt?.toDate?.() || new Date(0);
-    const bT = b.createdAt?.toDate?.() || new Date(0);
-    return bT - aT;
-  });
-
-  return arr;
-};
-
-export const getActivePatients = async () => {
-  const patientsRef = collection(db, 'patients');
-  const q = query(patientsRef, where('status', '==', 'active'));
-  const snap = await getDocs(q);
-  const arr = [];
-  snap.forEach((d) => arr.push(normalizePatient({ id: d.id, ...d.data() })));
-
-  arr.sort((a, b) => {
-    const aT = a.createdAt?.toDate?.() || new Date(0);
-    const bT = b.createdAt?.toDate?.() || new Date(0);
-    return bT - aT;
-  });
-
-  return arr;
-};
-
-export const getArchivedPatients = async () => {
-  const patientsRef = collection(db, 'patients');
-  const q = query(patientsRef, where('status', '==', 'archived'));
-  const snap = await getDocs(q);
-  const arr = [];
-  snap.forEach((d) => arr.push(normalizePatient({ id: d.id, ...d.data() })));
-
-  arr.sort((a, b) => {
-    const aT = a.updatedAt?.toDate?.() || new Date(0);
-    const bT = b.updatedAt?.toDate?.() || new Date(0);
-    return bT - aT;
-  });
-
-  return arr;
-};
-
-export const getPatientById = async (patientId) => {
-  const ref = doc(db, 'patients', patientId);
-  const snap = await getDoc(ref);
-  return snap.exists() ? normalizePatient({ id: snap.id, ...snap.data() }) : null;
-};
-
-/* --------------------- Atualizações CRUD simples --------------------- */
-
-export const updatePatient = async (patientId, patch) => {
-  const ref = doc(db, 'patients', patientId);
-  await updateDoc(ref, { ...patch, updatedAt: serverTimestamp() });
-  return true;
-};
-
-export const archivePatient = async (patientId) => {
-  const ref = doc(db, 'patients', patientId);
-  await updateDoc(ref, { status: 'archived', updatedAt: serverTimestamp() });
-  return true;
-};
-
-export const reactivatePatient = async (patientId) => {
-  const ref = doc(db, 'patients', patientId);
-  await updateDoc(ref, { status: 'active', updatedAt: serverTimestamp() });
-  return true;
-};
-
-export const deletePatient = async (patientId) => {
-  const ref = doc(db, 'patients', patientId);
-  await deleteDoc(ref);
-  return true;
-};
-
-/* --------------------- Listeners em tempo real (com MERGE) --------------------- */
-
-// MESCLA pacientes do documento (documents/{docId}/patients) com os da raiz (patients)
-// e entrega uma única lista normalizada. Resolve divergência entre devices.
-export const subscribeToDocumentPatients = (documentId, callback) => {
-  const rootQ = query(collection(db, 'patients'), where('documentId', '==', documentId), where('status', '==', 'active'));
-  const docCol = collection(db, 'documents', documentId, 'patients');
-
-  let rootMap = new Map(); // id -> patient (raiz)
-  let docMap = new Map();  // id -> patient (doc)
-
-  const emit = () => {
-    const ids = new Set([...rootMap.keys(), ...docMap.keys()]);
-    const merged = [];
-    ids.forEach((id) => {
-      const rootP = rootMap.get(id) || null;
-      const docP = docMap.get(id) || null;
-      const m = mergePatient(docP, rootP);
-      if (m) merged.push(m);
-    });
-
-    // ordenar por createdAt desc (no cliente)
-    merged.sort((a, b) => {
-      const aT = a.createdAt?.toDate?.() || new Date(0);
-      const bT = b.createdAt?.toDate?.() || new Date(0);
-      return bT - aT;
-    });
-
-    callback(merged);
-  };
-
-  const unsubRoot = onSnapshot(rootQ, (snap) => {
-    const next = new Map();
-    snap.forEach((d) => next.set(d.id, { id: d.id, ...d.data() }));
-    rootMap = next;
-    emit();
-  });
-
-  const unsubDoc = onSnapshot(docCol, (snap) => {
-    const next = new Map();
-    snap.forEach((d) => next.set(d.id, { id: d.id, ...d.data() }));
-    docMap = next;
-    emit();
-  });
-
-  return () => {
-    unsubRoot();
-    unsubDoc();
-  };
-};
-
-// Listener de paciente por ID (raiz). Mantemos assinatura atual.
-// Se o seu fluxo precisar do paciente MESCLADO por documento específico, use a lista acima
-// (subscribeToDocumentPatients) para obter o objeto já unificado e repassar ao componente.
-export const subscribeToPatient = (patientId, callback) => {
-  const ref = doc(db, 'patients', patientId);
-  return onSnapshot(
-    ref,
-    (snap) => {
-      callback(snap.exists() ? normalizePatient({ id: snap.id, ...snap.data() }) : null);
-    },
-    (err) => console.error('onSnapshot subscribeToPatient', err)
-  );
-};
-
-export const subscribeToActivePatients = (callback) => {
-  const q = query(collection(db, 'patients'), where('status', '==', 'active'));
-  return onSnapshot(q, (snap) => {
-    const arr = [];
-    snap.forEach((d) => arr.push(normalizePatient({ id: d.id, ...d.data() })));
-    arr.sort((a, b) => {
-      const aT = a.createdAt?.toDate?.() || new Date(0);
-      const bT = b.createdAt?.toDate?.() || new Date(0);
-      return bT - aT;
-    });
-    callback(arr);
-  });
-};
-
-/* --------------------- Atualização de EXAMES (espelhada) --------------------- */
-
-// Atualiza o exame no paciente da RAIZ e, se houver 'documentId' no paciente,
-// espelha também em documents/{docId}/patients/{patientId}. Usa atualização
-// aninhada (exams.<tipo>) para não sobrescrever o outro exame.
-export const updateExamStatus = async (patientId, examType, examData) => {
-  const rootRef = doc(db, 'patients', patientId);
-  const rootSnap = await getDoc(rootRef);
-
-  if (!rootSnap.exists()) {
-    throw new Error(`Paciente ${patientId} não encontrado na raiz`);
-  }
-
-  // Atualiza na RAIZ, preservando os demais exames
-  await updateDoc(rootRef, {
-    [`exams.${examType}`]: {
-      uploaded: true,
-      url: examData.url,
-      uploadedAt: serverTimestamp(),
-      metadata: examData.metadata || null,
-    },
-    updatedAt: serverTimestamp(),
-  });
-
-  // Se conhecer o docId (vinculado no paciente), espelha no escopo do documento
-  const rootData = rootSnap.data();
-  const docId = rootData?.documentId || null;
-
-  if (docId) {
-    const docRef = doc(db, 'documents', docId, 'patients', patientId);
-    const docSnap = await getDoc(docRef);
-    if (!docSnap.exists()) {
-      await setDoc(docRef, { id: patientId, createdAt: serverTimestamp() }, { merge: true });
+    let docRef;
+    if (customId) {
+      // Usar ID customizado (para atendimento rápido)
+      docRef = doc(patientsRef, customId);
+      await setDoc(docRef, newPatient);
+      console.log('🔧 [DEBUG] Paciente salvo com ID customizado:', customId);
+    } else {
+      // Gerar ID automaticamente
+      docRef = await addDoc(patientsRef, newPatient);
+      console.log('🔧 [DEBUG] Paciente salvo com ID gerado:', docRef.id);
     }
-    await updateDoc(docRef, {
-      [`exams.${examType}`]: {
+    
+    const result = { id: docRef.id, ...newPatient };
+    console.log('🔧 [DEBUG] Paciente criado com sucesso:', result);
+    return result;
+  } catch (error) {
+    console.error('❌ [ERROR] Erro ao criar paciente:', error);
+    throw error;
+  }
+};
+
+// Obter todos os pacientes de um documento específico (SEM orderBy para evitar erro de índice)
+export const getPatients = async (documentId, status = 'active') => {
+  console.log('🔧 [DEBUG] getPatients chamada para documento:', documentId, 'status:', status);
+  
+  try {
+    const patientsRef = collection(db, 'patients');
+    const q = query(
+      patientsRef, 
+      where('documentId', '==', documentId),
+      where('status', '==', status)
+      // REMOVIDO: orderBy('createdAt', 'desc') - causa erro de índice
+    );
+    const querySnapshot = await getDocs(q);
+    
+    const patients = [];
+    querySnapshot.forEach((doc) => {
+      patients.push({ id: doc.id, ...doc.data() });
+    });
+    
+    console.log('🔧 [DEBUG] Pacientes encontrados:', patients.length, patients);
+    
+    // Ordenar no cliente para evitar erro de índice
+    patients.sort((a, b) => {
+      const timeA = a.createdAt?.toDate?.() || new Date(0);
+      const timeB = b.createdAt?.toDate?.() || new Date(0);
+      return timeB - timeA; // Mais recente primeiro
+    });
+    
+    console.log('🔧 [DEBUG] Pacientes ordenados:', patients);
+    return patients;
+  } catch (error) {
+    console.error('❌ [ERROR] Erro ao buscar pacientes do documento:', error);
+    throw error;
+  }
+};
+
+// Buscar todos os pacientes ativos (SEM orderBy)
+export const getActivePatients = async () => {
+  console.log('🔧 [DEBUG] getActivePatients chamada');
+  
+  try {
+    const patientsRef = collection(db, 'patients');
+    const q = query(
+      patientsRef, 
+      where('status', '==', 'active')
+      // REMOVIDO: orderBy('createdAt', 'desc')
+    );
+    const querySnapshot = await getDocs(q);
+    
+    const patients = [];
+    querySnapshot.forEach((doc) => {
+      patients.push({ id: doc.id, ...doc.data() });
+    });
+    
+    console.log('🔧 [DEBUG] Pacientes ativos encontrados:', patients.length);
+    
+    // Ordenar no cliente
+    patients.sort((a, b) => {
+      const timeA = a.createdAt?.toDate?.() || new Date(0);
+      const timeB = b.createdAt?.toDate?.() || new Date(0);
+      return timeB - timeA;
+    });
+    
+    return patients;
+  } catch (error) {
+    console.error('❌ [ERROR] Erro ao buscar pacientes ativos:', error);
+    throw error;
+  }
+};
+
+// Buscar pacientes arquivados (SEM orderBy)
+export const getArchivedPatients = async () => {
+  try {
+    const patientsRef = collection(db, 'patients');
+    const q = query(
+      patientsRef, 
+      where('status', '==', 'archived')
+      // REMOVIDO: orderBy('updatedAt', 'desc')
+    );
+    const querySnapshot = await getDocs(q);
+    
+    const patients = [];
+    querySnapshot.forEach((doc) => {
+      patients.push({ id: doc.id, ...doc.data() });
+    });
+    
+    // Ordenar no cliente
+    patients.sort((a, b) => {
+      const timeA = a.updatedAt?.toDate?.() || new Date(0);
+      const timeB = b.updatedAt?.toDate?.() || new Date(0);
+      return timeB - timeA;
+    });
+    
+    return patients;
+  } catch (error) {
+    console.error('❌ [ERROR] Erro ao buscar pacientes arquivados:', error);
+    throw error;
+  }
+};
+
+// Buscar paciente por ID
+export const getPatientById = async (patientId) => {
+  try {
+    const patientRef = doc(db, 'patients', patientId);
+    const patientSnap = await getDoc(patientRef);
+    
+    if (patientSnap.exists()) {
+      return { id: patientSnap.id, ...patientSnap.data() };
+    } else {
+      throw new Error('Paciente não encontrado');
+    }
+  } catch (error) {
+    console.error('❌ [ERROR] Erro ao buscar paciente:', error);
+    throw error;
+  }
+};
+
+// Atualizar dados do paciente
+export const updatePatient = async (patientId, updateData) => {
+  try {
+    const patientRef = doc(db, 'patients', patientId);
+    const dataToUpdate = {
+      ...updateData,
+      updatedAt: serverTimestamp()
+    };
+    
+    await updateDoc(patientRef, dataToUpdate);
+    return true;
+  } catch (error) {
+    console.error('❌ [ERROR] Erro ao atualizar paciente:', error);
+    throw error;
+  }
+};
+
+// Arquivar paciente
+export const archivePatient = async (patientId) => {
+  try {
+    const patientRef = doc(db, 'patients', patientId);
+    await updateDoc(patientRef, {
+      status: 'archived',
+      updatedAt: serverTimestamp()
+    });
+    return true;
+  } catch (error) {
+    console.error('❌ [ERROR] Erro ao arquivar paciente:', error);
+    throw error;
+  }
+};
+
+// Reativar paciente
+export const reactivatePatient = async (patientId) => {
+  try {
+    const patientRef = doc(db, 'patients', patientId);
+    await updateDoc(patientRef, {
+      status: 'active',
+      updatedAt: serverTimestamp()
+    });
+    return true;
+  } catch (error) {
+    console.error('❌ [ERROR] Erro ao reativar paciente:', error);
+    throw error;
+  }
+};
+
+// Deletar paciente permanentemente
+export const deletePatient = async (patientId) => {
+  try {
+    const patientRef = doc(db, 'patients', patientId);
+    await deleteDoc(patientRef);
+    return true;
+  } catch (error) {
+    console.error('❌ [ERROR] Erro ao deletar paciente:', error);
+    throw error;
+  }
+};
+
+// Listener em tempo real para pacientes de um documento específico (SEM orderBy)
+export const subscribeToDocumentPatients = (documentId, callback) => {
+  console.log('🔧 [DEBUG] subscribeToDocumentPatients iniciado para documento:', documentId);
+  
+  const patientsRef = collection(db, 'patients');
+  const q = query(
+    patientsRef, 
+    where('documentId', '==', documentId),
+    where('status', '==', 'active')
+    // REMOVIDO: orderBy('createdAt', 'desc')
+  );
+  
+  return onSnapshot(q, (querySnapshot) => {
+    console.log('🔧 [DEBUG] onSnapshot disparado, documentos encontrados:', querySnapshot.size);
+    
+    const patients = [];
+    querySnapshot.forEach((doc) => {
+      const patientData = { id: doc.id, ...doc.data() };
+      console.log('🔧 [DEBUG] Paciente encontrado:', patientData);
+      patients.push(patientData);
+    });
+    
+    // Ordenar no cliente
+    patients.sort((a, b) => {
+      const timeA = a.createdAt?.toDate?.() || new Date(0);
+      const timeB = b.createdAt?.toDate?.() || new Date(0);
+      return timeB - timeA;
+    });
+    
+    console.log('🔧 [DEBUG] Lista final de pacientes enviada para callback:', patients);
+    callback(patients);
+  }, (error) => {
+    console.error('❌ [ERROR] Erro no listener de pacientes:', error);
+  });
+};
+
+// Listener em tempo real para pacientes ativos (SEM orderBy)
+export const subscribeToActivePatients = (callback) => {
+  const patientsRef = collection(db, 'patients');
+  const q = query(
+    patientsRef, 
+    where('status', '==', 'active')
+    // REMOVIDO: orderBy('createdAt', 'desc')
+  );
+  
+  return onSnapshot(q, (querySnapshot) => {
+    const patients = [];
+    querySnapshot.forEach((doc) => {
+      patients.push({ id: doc.id, ...doc.data() });
+    });
+    
+    // Ordenar no cliente
+    patients.sort((a, b) => {
+      const timeA = a.createdAt?.toDate?.() || new Date(0);
+      const timeB = b.createdAt?.toDate?.() || new Date(0);
+      return timeB - timeA;
+    });
+    
+    callback(patients);
+  });
+};
+
+// Listener em tempo real para um paciente específico
+export const subscribeToPatient = (patientId, callback) => {
+  const patientRef = doc(db, 'patients', patientId);
+  
+  return onSnapshot(patientRef, (doc) => {
+    if (doc.exists()) {
+      callback({ id: doc.id, ...doc.data() });
+    } else {
+      callback(null);
+    }
+  });
+};
+
+// Atualizar status do exame
+export const updateExamStatus = async (patientId, examType, examData) => {
+  try {
+    const patientRef = doc(db, 'patients', patientId);
+    const updatePath = `exams.${examType}`;
+    
+    await updateDoc(patientRef, {
+      [updatePath]: {
         uploaded: true,
         url: examData.url,
         uploadedAt: serverTimestamp(),
-        metadata: examData.metadata || null,
+        metadata: examData.metadata
       },
-      updatedAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
     });
+    
+    return true;
+  } catch (error) {
+    console.error('❌ [ERROR] Erro ao atualizar status do exame:', error);
+    throw error;
   }
-
-  return true;
 };
 
-/* --------------------- Helpers de UI --------------------- */
-
+// Formatar tempo relativo (ex: "há 5 minutos")
 export const formatRelativeTime = (timestamp) => {
   if (!timestamp) return 'Agora mesmo';
+  
   const now = new Date();
-  const t = timestamp?.toDate ? timestamp.toDate() : new Date(timestamp);
-  const diffMs = now - t;
-
-  const s = Math.floor(diffMs / 1000);
-  if (s < 60) return 'Agora mesmo';
-  const m = Math.floor(s / 60);
-  if (m < 60) return `há ${m} min`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `há ${h} h`;
-  const d = Math.floor(h / 24);
-  return `há ${d} dias`;
+  const time = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+  const diffInMinutes = Math.floor((now - time) / (1000 * 60));
+  
+  if (diffInMinutes < 1) return 'Agora mesmo';
+  if (diffInMinutes < 60) return `há ${diffInMinutes} min`;
+  
+  const diffInHours = Math.floor(diffInMinutes / 60);
+  if (diffInHours < 24) return `há ${diffInHours}h`;
+  
+  const diffInDays = Math.floor(diffInHours / 24);
+  return `há ${diffInDays} dias`;
 };
 
+// Verificar se todos os exames foram enviados
 export const hasAllExams = (patient) => {
-  const ar = patient?.exams?.ar;
-  const to = patient?.exams?.tonometry;
-  return (!!ar?.uploaded || !!ar?.url) && (!!to?.uploaded || !!to?.url);
+  return patient.exams?.ar?.uploaded && patient.exams?.tonometry?.uploaded;
 };
 
+// Verificar se pelo menos um exame foi enviado
 export const hasAnyExam = (patient) => {
-  const ar = patient?.exams?.ar;
-  const to = patient?.exams?.tonometry;
-  return (!!ar?.uploaded || !!ar?.url) || (!!to?.uploaded || !!to?.url);
+  return patient.exams?.ar?.uploaded || patient.exams?.tonometry?.uploaded;
 };
+
