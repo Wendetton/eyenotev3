@@ -6,11 +6,10 @@ import { db } from '@/lib/firebase';
 import { doc, onSnapshot } from 'firebase/firestore';
 
 /**
- * ExamViewer — estável em sessão compartilhada e anti-flicker no iPad
- * - SOMENTE leitura: assina patients/{id} na raiz para garantir exams completos.
- * - Dedup de snapshots: só re-renderiza quando a URL realmente muda.
- * - Sticky URL: conserva a última imagem válida (sem “piscada”).
- * - Layout: imagem integral com altura estável (svh), sem transforms.
+ * ExamViewer — layout “enxuto” + anti-flicker iPad
+ * - SOMENTE leitura: assina patients/{id} na raiz e mescla com props.
+ * - Dedup de snapshots e Sticky URL (sem “piscada”).
+ * - Layout: header compacto e imagem dominante no card.
  */
 export default function ExamViewer({ patient }) {
   const [selectedExam, setSelectedExam] = useState('ar'); // 'ar' | 'tonometry'
@@ -21,7 +20,7 @@ export default function ExamViewer({ patient }) {
   const [rootExams, setRootExams] = useState(null);
   const prevRootExamsRef = useRef(null);
 
-  // Sticky URL por exame
+  // Sticky URL por exame (evita “piscar” no iOS/Chrome)
   const [displayedArUrl, setDisplayedArUrl] = useState(null);
   const [displayedTonoUrl, setDisplayedTonoUrl] = useState(null);
   const prevArUrlRef = useRef(null);
@@ -30,7 +29,7 @@ export default function ExamViewer({ patient }) {
   const patientId = patient?.id || null;
   const propExams = patient?.exams || {};
 
-  // Listener na raiz com DEDUP (só atualiza se URL mudou)
+  // Listener na raiz com dedup: só muda se a URL realmente mudou
   useEffect(() => {
     if (!patientId) {
       setRootExams(null);
@@ -52,13 +51,11 @@ export default function ExamViewer({ patient }) {
         prevRootExamsRef.current = next;
         setRootExams(next);
       }
-      // else: ignora mudanças irrelevantes (ex.: updatedAt/presença)
     });
-
     return () => unsub && unsub();
   }, [patientId]);
 
-  // Normalização
+  // Normalização defensiva
   const ensureExam = (exam) => {
     if (!exam) return { uploaded: false, url: null, uploadedAt: null, metadata: null };
     const { uploaded = !!exam.url, url = null, uploadedAt = null, metadata = null } = exam;
@@ -111,46 +108,56 @@ export default function ExamViewer({ patient }) {
     setShowModal(true);
   };
 
-  const statusChip = (hasUrl) => (hasUrl ? 'text-green-700 bg-green-50' : 'text-gray-600 bg-gray-100');
+  /* ---------- UI enxuta ---------- */
+
+  const Toggle = () => (
+    <div className="inline-flex rounded-md bg-gray-100 p-1">
+      <button
+        onClick={() => setSelectedExam('ar')}
+        className={`px-3 py-1.5 text-xs rounded-md transition ${
+          selectedExam === 'ar' ? 'bg-blue-600 text-white' : 'text-gray-700 hover:bg-gray-200'
+        }`}
+        aria-pressed={selectedExam === 'ar'}
+      >
+        AR
+      </button>
+      <button
+        onClick={() => setSelectedExam('tonometry')}
+        className={`px-3 py-1.5 text-xs rounded-md transition ${
+          selectedExam === 'tonometry' ? 'bg-blue-600 text-white' : 'text-gray-700 hover:bg-gray-200'
+        }`}
+        aria-pressed={selectedExam === 'tonometry'}
+      >
+        Tonometria
+      </button>
+    </div>
+  );
 
   const ImageBlock = ({ label, examType, stickyUrl, liveUrl }) => {
-    // prioridade: stickyUrl (última válida) > liveUrl
     const url = stickyUrl || liveUrl || null;
 
     return (
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h4 className="font-medium text-gray-900">{label}</h4>
-          <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusChip(!!url)}`}>
-            {url ? 'Enviado' : 'Pendente'}
-          </span>
-        </div>
+      <div>
+        {/* título discreto acima da imagem (sem chips/labels laterais) */}
+        <div className="mb-2 text-sm font-medium text-gray-800">{label}</div>
 
         {url ? (
           <div
-            className="relative w-full rounded-lg overflow-hidden bg-gray-50 cursor-pointer group"
+            className="relative w-full rounded-lg overflow-hidden bg-gray-50 cursor-pointer"
             onClick={() => handleOpenModal(url, patient?.name || 'Exame', examType)}
             aria-label="Abrir imagem em tela cheia"
           >
             <img
               src={url}
               alt={`Exame ${label}`}
-              // Evita flicker no iOS: carregar logo, sem hints assíncronos
-              loading="eager"
+              loading="eager"          /* anti-flicker iOS */
               draggable={false}
-              className="w-full h-auto max-h-[70svh] md:max-h-[75vh] object-contain select-none"
-              style={{
-                WebkitUserSelect: 'none',
-                userSelect: 'none',
-              }}
+              className="w-full h-auto max-h-[74svh] md:max-h-[78svh] object-contain select-none"
+              style={{ WebkitUserSelect: 'none', userSelect: 'none' }}
               onError={(e) => {
-                // Mantém última imagem boa
-                e.currentTarget.src = url;
+                e.currentTarget.src = url; // mantém última boa
               }}
             />
-            <div className="absolute top-2 left-2 text-[10px] px-2 py-1 rounded bg-black/60 text-white opacity-80 group-hover:opacity-100 transition-opacity">
-              Toque para ampliar
-            </div>
           </div>
         ) : (
           <div className="p-6 text-center text-gray-500 bg-gray-50 rounded-lg border">
@@ -163,8 +170,7 @@ export default function ExamViewer({ patient }) {
 
   if (!patient) {
     return (
-      <div className="bg-white p-6 rounded-lg shadow-lg border-t-4 border-purple-500">
-        <h2 className="text-xl font-semibold mb-4 text-gray-700">Exames do Paciente</h2>
+      <div className="bg-white p-4 rounded-lg shadow-lg border-t-4 border-purple-500">
         <div className="text-center text-gray-500 py-8">
           <div className="text-4xl mb-2">📋</div>
           <p>Selecione um paciente para visualizar os exames</p>
@@ -175,35 +181,15 @@ export default function ExamViewer({ patient }) {
 
   return (
     <>
-      <div className="bg-white p-6 rounded-lg shadow-lg border-t-4 border-purple-500">
-        <h2 className="text-xl font-semibold mb-4 text-gray-700">Exames do Paciente</h2>
-        <p className="text-sm text-gray-600 mb-4">{patient?.name}</p>
-
-        {/* Seletor local */}
-        <div className="flex space-x-2 mb-6">
-          <button
-            onClick={() => setSelectedExam('ar')}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              selectedExam === 'ar' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
-            aria-pressed={selectedExam === 'ar'}
-          >
-            AR
-          </button>
-
-          <button
-            onClick={() => setSelectedExam('tonometry')}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              selectedExam === 'tonometry' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
-            aria-pressed={selectedExam === 'tonometry'}
-          >
-            Tonometria
-          </button>
+      <div className="bg-white p-4 rounded-lg shadow-lg border-t-4 border-purple-500">
+        {/* header compacto: título + toggle */}
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-gray-800">Exames do Paciente</h2>
+          <Toggle />
         </div>
 
-        {/* Renderização do exame selecionado */}
-        <div className="space-y-6">
+        {/* imagem dominante */}
+        <div className="space-y-4">
           {selectedExam === 'ar' ? (
             <ImageBlock
               label="Autorrefrator"
