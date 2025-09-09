@@ -773,7 +773,7 @@ export default function DocumentPage() {
         </header>
 
         <div className="flex flex-grow flex-col lg:flex-row gap-6">
-          <main className="flex-grow lg:w-3/4">
+          <main className="flex-grow lg:w-[62%]">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <EyeForm 
                 eyeLabel="Olho Direito (OD)" 
@@ -915,7 +915,7 @@ export default function DocumentPage() {
           </main>
           
           {/* Sidebar - Apenas Exames do Paciente ocupando toda a coluna */}
-          <aside className="w-full lg:w-1/4 bg-white rounded-lg shadow-md lg:sticky lg:top-6 self-start">
+          <aside className="w-full lg:w-[38%] bg-white rounded-lg shadow-md lg:sticky lg:top-6 self-start">
             <ExamViewer patient={selectedPatient} />
           </aside>
         </div>
