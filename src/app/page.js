@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState } from 'react';
@@ -8,38 +9,23 @@ export default function HomePage() {
   const router = useRouter();
 
   const handleNavigateToDocument = () => {
-    const id = docIdInput.trim();
-    if (id) {
-      router.push(`/doc/${id}`);
+    if (docIdInput.trim()) {
+      router.push(`/doc/${docIdInput.trim()}`);
     }
-  };
-
-  const generateDocId = () => {
-    // ID simples e único o suficiente para a rota do documento
-    return (
-      Math.random().toString(36).slice(2, 8) +
-      Date.now().toString(36)
-    );
   };
 
   const handleCreateNewDocument = () => {
-    const newId = generateDocId();
-    router.push(`/doc/${newId}`);
-  };
-
-  const handleKeyDown = (e) => {
-    if (e.key === 'Enter') {
-      handleNavigateToDocument();
-    }
+    const newDocId = Math.random().toString(36).substring(2, 15);
+    router.push(`/doc/${newDocId}`);
   };
 
   return (
-    <div className="min-h-screen w-full flex flex-col items-center justify-center bg-white px-4">
+    <div className="container mx-auto p-4 flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
       <div className="text-center mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">EyeNote</h1>
+        <h1 className="text-4xl font-bold mb-2 text-gray-800">Eyenote</h1>
         <p className="text-gray-600">Sistema Colaborativo de Gestão Oftalmológica</p>
       </div>
-
+      
       <div className="w-full max-w-md bg-white shadow-lg rounded-lg p-6">
         <div className="mb-6">
           <h2 className="text-xl font-semibold mb-4 text-gray-800">Acessar Documento Existente</h2>
@@ -47,28 +33,24 @@ export default function HomePage() {
             type="text"
             value={docIdInput}
             onChange={(e) => setDocIdInput(e.target.value)}
-            onKeyDown={handleKeyDown}
             placeholder="Digite o ID do Documento"
-            className="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 mb-3 text-gray-800"
-            aria-label="ID do Documento"
+            className="w-full p-3 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 mb-3 text-gray-800"
+            onKeyPress={(e) => e.key === 'Enter' && handleNavigateToDocument()}
           />
           <button
-            type="button"
             onClick={handleNavigateToDocument}
-            className="w-full py-2.5 rounded-md bg-blue-600 text-white font-medium hover:bg-blue-700 transition-colors"
+            disabled={!docIdInput.trim()}
+            className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-bold py-3 px-4 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 transition duration-150 ease-in-out"
           >
-            Entrar
+            Acessar Documento
           </button>
         </div>
 
-        <div className="border-t border-gray-200 my-4" />
-
-        <div className="mt-4">
-          <h3 className="text-base font-medium mb-3 text-gray-800">Ou criar um novo documento</h3>
+        <div className="border-t pt-6">
+          <h2 className="text-xl font-semibold mb-4 text-gray-800">Ou Crie um Novo</h2>
           <button
-            type="button"
             onClick={handleCreateNewDocument}
-            className="w-full py-2.5 rounded-md bg-green-600 text-white font-medium hover:bg-green-700 transition-colors"
+            className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-opacity-50 transition duration-150 ease-in-out"
           >
             Criar Novo Documento
           </button>
@@ -81,3 +63,5 @@ export default function HomePage() {
     </div>
   );
 }
+
+
