@@ -6,22 +6,22 @@ import { db } from '@/lib/firebase';
 import { doc, onSnapshot } from 'firebase/firestore';
 
 /**
- * ExamViewer — robusto para sessão compartilhada
- * - NÃO altera Firestore: somente leitura (assina patients/{id} na raiz)
- * - Quando a ficha abrir "remotamente" em outro device, o componente
- *   busca os 'exams' na raiz e MESCLA com o que veio pelo paciente prop.
- * - "Sticky URL": não limpa a imagem se o snapshot vier temporariamente sem 'url'.
- * - Layout: imagem integral (object-contain) com altura estável no iPad (svh).
+ * ExamViewer — estável em sessão compartilhada e anti-flicker no iPad
+ * - SOMENTE leitura: assina patients/{id} na raiz para garantir exams completos.
+ * - Dedup de snapshots: só re-renderiza quando a URL realmente muda.
+ * - Sticky URL: conserva a última imagem válida (sem “piscada”).
+ * - Layout: imagem integral com altura estável (svh), sem transforms.
  */
 export default function ExamViewer({ patient }) {
   const [selectedExam, setSelectedExam] = useState('ar'); // 'ar' | 'tonometry'
   const [showModal, setShowModal] = useState(false);
   const [modalImage, setModalImage] = useState(null);
 
-  // Exames vindos diretamente da raiz (patients/{id}), em tempo real
+  // Exames vindos diretamente da raiz (patients/{id})
   const [rootExams, setRootExams] = useState(null);
+  const prevRootExamsRef = useRef(null);
 
-  // Sticky URL por exame (evita "piscadas" e sumiços entre devices)
+  // Sticky URL por exame
   const [displayedArUrl, setDisplayedArUrl] = useState(null);
   const [displayedTonoUrl, setDisplayedTonoUrl] = useState(null);
   const prevArUrlRef = useRef(null);
@@ -30,41 +30,55 @@ export default function ExamViewer({ patient }) {
   const patientId = patient?.id || null;
   const propExams = patient?.exams || {};
 
-  // Assina a raiz para garantir que temos 'exams' completos mesmo quando a ficha
-  // abre "de fora" (sincronização de sessão) e as props não trazem as URLs.
+  // Listener na raiz com DEDUP (só atualiza se URL mudou)
   useEffect(() => {
     if (!patientId) {
       setRootExams(null);
+      prevRootExamsRef.current = null;
       return;
     }
     const unsub = onSnapshot(doc(db, 'patients', patientId), (snap) => {
       const data = snap.exists() ? snap.data() : null;
-      setRootExams(data?.exams || null);
+      const next = data?.exams || null;
+
+      const prev = prevRootExamsRef.current || {};
+      const same =
+        (!!prev?.ar?.url === !!next?.ar?.url) &&
+        (prev?.ar?.url === next?.ar?.url) &&
+        (!!prev?.tonometry?.url === !!next?.tonometry?.url) &&
+        (prev?.tonometry?.url === next?.tonometry?.url);
+
+      if (!same) {
+        prevRootExamsRef.current = next;
+        setRootExams(next);
+      }
+      // else: ignora mudanças irrelevantes (ex.: updatedAt/presença)
     });
+
     return () => unsub && unsub();
   }, [patientId]);
 
-  // Normalização defensiva
+  // Normalização
   const ensureExam = (exam) => {
     if (!exam) return { uploaded: false, url: null, uploadedAt: null, metadata: null };
     const { uploaded = !!exam.url, url = null, uploadedAt = null, metadata = null } = exam;
     return { uploaded, url, uploadedAt, metadata };
   };
 
-  // Mescla exames: prioridade para o que tiver URL (geralmente raiz chega mais completo)
+  // Mescla props + raiz (prioriza quem tem URL)
   const mergedExams = useMemo(() => {
-    const ar = ensureExam(propExams?.ar);
-    const to = ensureExam(propExams?.tonometry);
-    const rootAr = ensureExam(rootExams?.ar);
-    const rootTo = ensureExam(rootExams?.tonometry);
+    const arProp = ensureExam(propExams?.ar);
+    const toProp = ensureExam(propExams?.tonometry);
+    const arRoot = ensureExam(rootExams?.ar);
+    const toRoot = ensureExam(rootExams?.tonometry);
 
     return {
-      ar: rootAr.url ? rootAr : ar.url ? ar : rootAr,             // prioriza quem tem URL
-      tonometry: rootTo.url ? rootTo : to.url ? to : rootTo,
+      ar: arRoot.url ? arRoot : (arProp.url ? arProp : arRoot),
+      tonometry: toRoot.url ? toRoot : (toProp.url ? toProp : toRoot),
     };
   }, [propExams?.ar, propExams?.tonometry, rootExams?.ar, rootExams?.tonometry]);
 
-  // Atualiza sticky para AR quando aparecer uma URL válida
+  // Sticky AR
   useEffect(() => {
     const next = mergedExams.ar?.url || null;
     if (next && next !== prevArUrlRef.current) {
@@ -74,11 +88,11 @@ export default function ExamViewer({ patient }) {
       prevArUrlRef.current = next;
       setDisplayedArUrl(next);
     }
-    // não limpamos se vier null; mantemos sticky
+    // não limpa quando vem null
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mergedExams.ar?.url]);
 
-  // Atualiza sticky para Tonometria quando aparecer uma URL válida
+  // Sticky Tonometria
   useEffect(() => {
     const next = mergedExams.tonometry?.url || null;
     if (next && next !== prevTonoUrlRef.current) {
@@ -97,11 +111,10 @@ export default function ExamViewer({ patient }) {
     setShowModal(true);
   };
 
-  const statusChip = (hasUrl) =>
-    hasUrl ? 'text-green-700 bg-green-50' : 'text-gray-600 bg-gray-100';
+  const statusChip = (hasUrl) => (hasUrl ? 'text-green-700 bg-green-50' : 'text-gray-600 bg-gray-100');
 
   const ImageBlock = ({ label, examType, stickyUrl, liveUrl }) => {
-    // prioridade: stickyUrl (última válida) > liveUrl atual
+    // prioridade: stickyUrl (última válida) > liveUrl
     const url = stickyUrl || liveUrl || null;
 
     return (
@@ -122,18 +135,16 @@ export default function ExamViewer({ patient }) {
             <img
               src={url}
               alt={`Exame ${label}`}
-              loading="lazy"
-              decoding="async"
+              // Evita flicker no iOS: carregar logo, sem hints assíncronos
+              loading="eager"
+              draggable={false}
               className="w-full h-auto max-h-[70svh] md:max-h-[75vh] object-contain select-none"
               style={{
                 WebkitUserSelect: 'none',
                 userSelect: 'none',
-                contain: 'content',
-                backfaceVisibility: 'hidden',
-                transform: 'translateZ(0)', // ajuda a estabilizar no Safari
               }}
               onError={(e) => {
-                // Mantém a última imagem boa; se falhar, não limpa a tela
+                // Mantém última imagem boa
                 e.currentTarget.src = url;
               }}
             />
@@ -173,21 +184,17 @@ export default function ExamViewer({ patient }) {
           <button
             onClick={() => setSelectedExam('ar')}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              selectedExam === 'ar'
-                ? 'bg-blue-600 text-white'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              selectedExam === 'ar' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
             }`}
             aria-pressed={selectedExam === 'ar'}
           >
             AR
           </button>
 
-        <button
+          <button
             onClick={() => setSelectedExam('tonometry')}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              selectedExam === 'tonometry'
-                ? 'bg-blue-600 text-white'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              selectedExam === 'tonometry' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
             }`}
             aria-pressed={selectedExam === 'tonometry'}
           >
@@ -195,7 +202,7 @@ export default function ExamViewer({ patient }) {
           </button>
         </div>
 
-        {/* Renderização do exame selecionado (merge + sticky) */}
+        {/* Renderização do exame selecionado */}
         <div className="space-y-6">
           {selectedExam === 'ar' ? (
             <ImageBlock
