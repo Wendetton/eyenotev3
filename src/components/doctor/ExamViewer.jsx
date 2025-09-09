@@ -5,10 +5,10 @@ import ImageModal from '@/components/common/ImageModal';
 
 /**
  * ExamViewer
- * - Exibe imagem INTEGRAL no próprio box (sem necessidade de clique)
- * - Mantém o modal para zoom/pan quando o usuário quiser ampliar
- * - Corrige comportamento em iPad/iOS: usa svh para viewport estável
- * - Não altera Firestore nem a colaboração em tempo real
+ * - Exibe imagem INTEGRAL no box (sem necessidade de clique)
+ * - Mantém modal para zoom/pan quando o usuário quiser ampliar
+ * - Corrige comportamento em iPad/iOS com svh
+ * - Considera 'url' disponível como suficiente para exibir a imagem
  */
 export default function ExamViewer({ patient }) {
   const [selectedExam, setSelectedExam] = useState('ar');
@@ -33,38 +33,29 @@ export default function ExamViewer({ patient }) {
 
   const handleImageClick = (examType) => {
     const exam = examType === 'ar' ? arExam : tonometryExam;
-    if (exam?.uploaded && exam?.url) {
+    if (exam?.url) {
       setModalImage({
         url: exam.url,
         title: patient.name || 'Exame',
-        examType: examType
+        examType: examType,
       });
       setShowModal(true);
     }
   };
 
   const getExamStatus = (exam) => {
-    if (!exam || !exam.uploaded || !exam.url) {
-      return {
-        label: 'sem exame',
-        color: 'text-gray-500',
-        bg: 'bg-gray-100',
-        icon: '⬜'
-      };
+    // Se já existe URL, consideramos "Enviado" (mesmo que 'uploaded' ainda não tenha propagado)
+    if (exam?.url || exam?.uploaded) {
+      return { status: 'uploaded', text: 'Enviado', color: 'text-green-600 bg-green-50' };
     }
-    return {
-      label: 'disponível',
-      color: 'text-green-600',
-      bg: 'bg-green-50',
-      icon: '🟩'
-    };
+    return { status: 'pending', text: 'Pendente', color: 'text-red-600 bg-red-50' };
   };
 
   const arStatus = getExamStatus(arExam);
   const tonometryStatus = getExamStatus(tonometryExam);
 
   const ImageBox = ({ exam, alt, onClick }) => {
-    if (!exam?.uploaded || !exam?.url) {
+    if (!exam?.url && !exam?.uploaded) {
       return (
         <div className="p-6 text-center text-gray-500 bg-gray-50 rounded-lg border">
           Nenhuma imagem enviada.
@@ -72,8 +63,8 @@ export default function ExamViewer({ patient }) {
       );
     }
 
-    // Preferir renderização nítida em telas retina, sem cortar
-    const thumb = exam?.metadata?.thumbnailUrl || exam.url;
+    const fullUrl = exam.url;
+    const thumb = exam?.metadata?.thumbnailUrl || fullUrl;
 
     return (
       <div
@@ -82,15 +73,15 @@ export default function ExamViewer({ patient }) {
         aria-label="Abrir imagem em tela cheia"
       >
         <img
-          src={exam.url}
-          srcSet={`${thumb} 480w, ${exam.url} 1280w, ${exam.url} 1920w`}
+          src={fullUrl}
+          srcSet={`${thumb} 480w, ${fullUrl} 1280w, ${fullUrl} 1920w`}
           sizes="(max-width: 1280px) 100vw, 33vw"
           alt={alt}
           loading="lazy"
           decoding="async"
           className="w-full h-auto max-h-[70svh] md:max-h-[75vh] object-contain select-none"
           onError={(e) => {
-            e.currentTarget.src = exam.url;
+            e.currentTarget.src = fullUrl;
           }}
           style={{ WebkitUserSelect: 'none', userSelect: 'none' }}
         />
@@ -113,19 +104,19 @@ export default function ExamViewer({ patient }) {
             onClick={() => setSelectedExam('ar')}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
               selectedExam === 'ar'
-                ? 'bg-purple-600 text-white'
+                ? 'bg-blue-600 text-white'
                 : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
             }`}
             aria-pressed={selectedExam === 'ar'}
           >
-            Autorrefração
+            AR
           </button>
 
           <button
             onClick={() => setSelectedExam('tonometry')}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
               selectedExam === 'tonometry'
-                ? 'bg-purple-600 text-white'
+                ? 'bg-blue-600 text-white'
                 : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
             }`}
             aria-pressed={selectedExam === 'tonometry'}
@@ -134,44 +125,39 @@ export default function ExamViewer({ patient }) {
           </button>
         </div>
 
-        {/* Cards de status */}
-        <div className="grid grid-cols-2 gap-4 mb-6">
-          <div className={`p-3 rounded-lg border ${arStatus.bg} flex items-center justify-between`}>
-            <span className="flex items-center space-x-2">
-              <span className="text-lg">{arStatus.icon}</span>
-              <span className="text-sm text-gray-700">AR</span>
-            </span>
-            <span className={`text-xs font-medium ${arStatus.color}`}>{arStatus.label}</span>
-          </div>
+        {/* Blocos de exame */}
+        <div className="space-y-4">
+          {selectedExam === 'ar' && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h4 className="font-medium text-gray-900">Autorrefrator</h4>
+                <span className={`px-2 py-1 rounded-full text-xs font-medium ${arStatus.color}`}>
+                  {arStatus.text}
+                </span>
+              </div>
+              <ImageBox exam={arExam} alt="Exame de Autorrefração" onClick={() => handleImageClick('ar')} />
+            </div>
+          )}
 
-          <div className={`p-3 rounded-lg border ${tonometryStatus.bg} flex items-center justify-between`}>
-            <span className="flex items-center space-x-2">
-              <span className="text-lg">{tonometryStatus.icon}</span>
-              <span className="text-sm text-gray-700">Tonometria</span>
-            </span>
-            <span className={`text-xs font-medium ${tonometryStatus.color}`}>{tonometryStatus.label}</span>
-          </div>
-        </div>
-
-        {/* Renderização do exame selecionado: imagem integral no box */}
-        <div className="space-y-6">
-          {selectedExam === 'ar' ? (
-            <ImageBox
-              exam={arExam}
-              alt="Exame de Autorrefração"
-              onClick={() => handleImageClick('ar')}
-            />
-          ) : (
-            <ImageBox
-              exam={tonometryExam}
-              alt="Exame de Tonometria"
-              onClick={() => handleImageClick('tonometry')}
-            />
+          {selectedExam === 'tonometry' && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h4 className="font-medium text-gray-900">Tonometria</h4>
+                <span className={`px-2 py-1 rounded-full text-xs font-medium ${tonometryStatus.color}`}>
+                  {tonometryStatus.text}
+                </span>
+              </div>
+              <ImageBox
+                exam={tonometryExam}
+                alt="Exame de Tonometria"
+                onClick={() => handleImageClick('tonometry')}
+              />
+            </div>
           )}
         </div>
       </div>
 
-      {/* Modal de zoom/pan (opcional) */}
+      {/* Modal de zoom/pan */}
       <ImageModal
         isOpen={showModal}
         onClose={() => setShowModal(false)}
