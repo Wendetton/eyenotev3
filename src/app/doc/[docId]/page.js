@@ -212,22 +212,33 @@ export default function DocumentPage() {
             });
           }
 
-    // Só segue seleção se for do mesmo perfil
-            if (data.selectedByProfile === userProfile && data.selectedPatientId) {
-              if (data.selectedPatientId !== currentPatientIdRef.current) {
-                attachPatientListenerById(
-                  data.selectedPatientId,
-                  data.selectedPatientName || 'Paciente Selecionado'
-                );
-              }
-            } else if (
-              data.selectedByProfile === userProfile && 
-              !data.selectedPatientId && 
-              currentPatientIdRef.current
-            ) {
-              // Limpeza de seleção *apenas* quando foi originada pelo mesmo perfil
-              attachPatientListenerById(null);
+          // 1) ler seleção por perfil (novo esquema)
+          const perProfileId   = data?.[`selectedPatientId_${userProfile}`];
+          const perProfileName = data?.[`selectedPatientName_${userProfile}`] || 'Paciente Selecionado';
+          
+          // 2) fallback de compatibilidade (esquema antigo)
+          //    se não houver seleção por perfil, e a seleção "antiga" tiver sido feita pelo MESMO perfil,
+          //    ainda seguimos para não quebrar clientes que só escrevem o antigo.
+          const legacyOk = data?.selectedByProfile
+            ? data.selectedByProfile === userProfile
+            : true; // se não veio selectedByProfile, assume compat
+          
+          const legacyId   = legacyOk ? data?.selectedPatientId   : null;
+          const legacyName = legacyOk ? (data?.selectedPatientName || 'Paciente Selecionado') : 'Paciente Selecionado';
+          
+          // 3) escolha a fonte prioritária
+          const selId   = perProfileId ?? legacyId ?? null;
+          const selName = perProfileName ?? legacyName ?? 'Paciente Selecionado';
+          
+          if (selId) {
+            if (selId !== currentPatientIdRef.current) {
+              attachPatientListenerById(selId, selName);
             }
+          } else if (!selId && currentPatientIdRef.current) {
+            // limpeza da seleção remota para ESTE perfil
+            attachPatientListenerById(null);
+          }
+
             // Caso o outro perfil selecione/limpe, ignoramos para não “arrastar” a UI atual.
 
         } else {
