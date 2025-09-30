@@ -2,16 +2,17 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import ImageModal from '@/components/common/ImageModal';
-import { db } from '@/lib/firebase';
-import { doc, onSnapshot } from 'firebase/firestore';
+import { db, storage } from '@/lib/firebase';
+import { doc, onSnapshot, setDoc, serverTimestamp } from 'firebase/firestore';
+import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 /**
  * ExamViewer — layout “enxuto” + anti-flicker iPad
- * - SOMENTE leitura: assina patients/{id} na raiz e mescla com props.
+ * - Leitura: assina patients/{id} (raiz) e mescla com props.
  * - Dedup de snapshots e Sticky URL (sem “piscada”).
- * - Layout: header compacto e imagem dominante no card.
+ * - Se canEdit === true, mostra barra para substituir a imagem do exame selecionado (AR/Tonometria).
  */
-export default function ExamViewer({ patient }) {
+export default function ExamViewer({ patient, canEdit = false }) {
   const [selectedExam, setSelectedExam] = useState('ar'); // 'ar' | 'tonometry'
   const [showModal, setShowModal] = useState(false);
   const [modalImage, setModalImage] = useState(null);
@@ -25,6 +26,10 @@ export default function ExamViewer({ patient }) {
   const [displayedTonoUrl, setDisplayedTonoUrl] = useState(null);
   const prevArUrlRef = useRef(null);
   const prevTonoUrlRef = useRef(null);
+
+  // Upload refs/estado
+  const fileInputRef = useRef(null);
+  const [isUploading, setIsUploading] = useState(false);
 
   const patientId = patient?.id || null;
   const propExams = patient?.exams || {};
@@ -85,7 +90,6 @@ export default function ExamViewer({ patient }) {
       prevArUrlRef.current = next;
       setDisplayedArUrl(next);
     }
-    // não limpa quando vem null
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mergedExams.ar?.url]);
 
@@ -106,6 +110,66 @@ export default function ExamViewer({ patient }) {
     if (!url) return;
     setModalImage({ url, title, examType });
     setShowModal(true);
+  };
+
+  /* ---------- Upload / Substituição ---------- */
+
+  const triggerPickFile = () => {
+    if (!patientId || isUploading) return;
+    fileInputRef.current?.click();
+  };
+
+  const handleFileSelected = async (e) => {
+    const file = e.target.files?.[0];
+    // limpa o input para permitir re-seleção do mesmo arquivo depois
+    e.target.value = '';
+    if (!file || !patientId) return;
+
+    try {
+      setIsUploading(true);
+
+      // examType conforme seleção atual do toggle
+      const examType = selectedExam === 'tonometry' ? 'tonometry' : 'ar';
+
+      // path único para bustar cache
+      const ext = file.name.includes('.') ? file.name.split('.').pop() : 'jpg';
+      const path = `exams/${patientId}/${examType}/${patientId}_${examType}_${Date.now()}.${ext}`;
+
+      const sref = storageRef(storage, path);
+      await uploadBytes(sref, file);
+      const url = await getDownloadURL(sref);
+
+      // Atualiza Firestore (merge) no doc raiz do paciente
+      const payload = {
+        exams: {
+          [examType]: {
+            uploaded: true,
+            url,
+            uploadedAt: serverTimestamp(),
+            metadata: {
+              name: file.name,
+              size: file.size,
+              type: file.type || null,
+            },
+          },
+        },
+      };
+      await setDoc(doc(db, 'patients', patientId), payload, { merge: true });
+
+      // Atualiza sticky imediatamente para evitar “piscar”
+      if (examType === 'ar') {
+        prevArUrlRef.current = url;
+        setDisplayedArUrl(url);
+      } else {
+        prevTonoUrlRef.current = url;
+        setDisplayedTonoUrl(url);
+      }
+    } catch (err) {
+      console.error('Falha ao enviar/substituir imagem:', err);
+      alert('Não foi possível enviar a imagem. Tente novamente.');
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   /* ---------- UI enxuta ---------- */
@@ -187,6 +251,36 @@ export default function ExamViewer({ patient }) {
           <h2 className="text-lg font-semibold text-gray-800">Exames do Paciente</h2>
           <Toggle />
         </div>
+
+        {/* barra de substituição (somente quando canEdit) */}
+        {canEdit && (
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div className="text-sm text-gray-600">
+              Substituir imagem do exame:&nbsp;
+              <strong>{selectedExam === 'ar' ? 'Autorrefrator' : 'Tonometria'}</strong>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleFileSelected}
+              />
+              <button
+                onClick={triggerPickFile}
+                disabled={!patientId || isUploading}
+                className={`px-3 py-1.5 text-sm rounded-md border shadow-sm ${
+                  isUploading
+                    ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                    : 'bg-blue-600 text-white hover:bg-blue-700'
+                }`}
+              >
+                {isUploading ? 'Enviando...' : 'Selecionar imagem'}
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* imagem dominante */}
         <div className="space-y-4">
