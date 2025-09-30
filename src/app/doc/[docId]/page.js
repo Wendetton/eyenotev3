@@ -212,15 +212,24 @@ export default function DocumentPage() {
             });
           }
 
-          // **chave**: sempre que mudar a seleção compartilhada, anexa listener do paciente via REF
-          if (data.selectedPatientId) {
-            if (data.selectedPatientId !== currentPatientIdRef.current) {
-              attachPatientListenerById(data.selectedPatientId, data.selectedPatientName || 'Paciente Selecionado');
+    // Só segue seleção se for do mesmo perfil
+            if (data.selectedByProfile === userProfile && data.selectedPatientId) {
+              if (data.selectedPatientId !== currentPatientIdRef.current) {
+                attachPatientListenerById(
+                  data.selectedPatientId,
+                  data.selectedPatientName || 'Paciente Selecionado'
+                );
+              }
+            } else if (
+              data.selectedByProfile === userProfile && 
+              !data.selectedPatientId && 
+              currentPatientIdRef.current
+            ) {
+              // Limpeza de seleção *apenas* quando foi originada pelo mesmo perfil
+              attachPatientListenerById(null);
             }
-          } else if (!data.selectedPatientId && currentPatientIdRef.current) {
-            // seleção limpa remotamente
-            attachPatientListenerById(null);
-          }
+            // Caso o outro perfil selecione/limpe, ignoramos para não “arrastar” a UI atual.
+
         } else {
           // cria doc raiz se não existir
           setDoc(docRef, initialDocumentData).catch(e => console.error('Erro ao criar documento raiz:', e));
@@ -419,6 +428,7 @@ export default function DocumentPage() {
         selectedPatientId: patient.id,
         selectedPatientName: patient.name || '',
         selectedBy: userName,
+        selectedByProfile: userProfile,
         selectedAt: serverTimestamp(),
       });
     }
@@ -431,6 +441,7 @@ export default function DocumentPage() {
         selectedPatientId: null,
         selectedPatientName: null,
         selectedBy: null,
+        selectedByProfile: null,
         selectedAt: serverTimestamp(),
       });
     } catch (e) {
