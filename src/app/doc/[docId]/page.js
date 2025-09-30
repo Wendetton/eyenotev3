@@ -31,115 +31,78 @@ import { generatePrescriptionPDF } from '@/utils/pdfGenerator';
 const getRandomColor = () => {
   const letters = '0123456789ABCDEF';
   let color = '#';
-  for (let i = 0; i < 6; i++) {
-    color += letters[Math.floor(Math.random() * 10)];
-  }
+  for (let i = 0; i < 6; i++) color += letters[Math.floor(Math.random() * 10)];
   return color;
 };
 
-const initialEyeData = {
-  esf: '0.00',
-  cil: '0.00',
-  eixo: '0',
-};
-
+const initialEyeData = { esf: '0.00', cil: '0.00', eixo: '0' };
 const initialDocumentData = {
   rightEye: { ...initialEyeData },
   leftEye: { ...initialEyeData },
-  addition: {
-    active: false,
-    value: '+0.75',
-  },
-  annotations: '',
+  addition: { active: false, value: '+0.75' },
+  annotations: ''
 };
 
-const generateOptions = (start, end, step, formatFixed = 2) => {
-  const options = [];
-  if (step === 0) return options;
-  const scale = Math.pow(10, formatFixed);
-  const scaledStart = Math.round(start * scale);
-  const scaledEnd = Math.round(end * scale);
-  const scaledStep = Math.round(step * scale);
-  if (scaledStep > 0) {
-    for (let i = scaledStart; i <= scaledEnd; i += scaledStep) {
-      const currentValue = i / scale;
-      const value = formatFixed > 0 ? currentValue.toFixed(formatFixed) : currentValue.toString();
-      const displayValue =
-        currentValue > 0 && formatFixed > 0 && value !== '0.00' ? `+${value}` : value;
-      options.push({ value: value, label: displayValue });
-    }
+const generateOptions = (start, end, step, fixed = 2) => {
+  const out = [];
+  if (!step) return out;
+  const s = Math.pow(10, fixed);
+  for (let i = Math.round(start*s); i <= Math.round(end*s); i += Math.round(step*s)) {
+    const v = i / s;
+    const value = fixed ? v.toFixed(fixed) : String(v);
+    const label = (v > 0 && fixed && value !== '0.00') ? `+${value}` : value;
+    out.push({ value, label });
   }
-  return options;
+  return out;
 };
-
 const esfOptions = generateOptions(-30, 30, 0.25, 2);
 const cilOptions = generateOptions(-10, 0, 0.25, 2);
 const eixoOptions = generateOptions(0, 180, 5, 0);
 const additionOptions = generateOptions(0.75, 4, 0.25, 2);
 
-const EyeForm = ({ eyeLabel, eyeData, eyeKey, onFieldChange, colorClass }) => {
-  return (
-    <div className={`bg-white p-6 rounded-lg shadow-lg border-t-4 ${colorClass}`}>
-      <h2 className="text-xl font-semibold mb-4 text-gray-700">{eyeLabel}</h2>
-      <div className="space-y-4">
-        <div>
-          <label htmlFor={`${eyeKey}-esf`} className="block text-sm font-medium text-gray-700 mb-1">
-            Esférico (ESF)
-          </label>
-          <select
-            id={`${eyeKey}-esf`}
-            name="esf"
-            value={eyeData.esf}
-            onChange={(e) => onFieldChange(`${eyeKey}.esf`, e.target.value)}
-            className="mt-1 block w-full pl-3 pr-10 py-3 text-base rounded-md shadow-sm text-black focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-          >
-            {esfOptions.map((option) => (
-              <option key={`${eyeKey}-esf-${option.value}`} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label htmlFor={`${eyeKey}-cil`} className="block text-sm font-medium text-gray-700 mb-1">
-            Cilindro (CIL)
-          </label>
-          <select
-            id={`${eyeKey}-cil`}
-            name="cil"
-            value={eyeData.cil}
-            onChange={(e) => onFieldChange(`${eyeKey}.cil`, e.target.value)}
-            className="mt-1 block w-full pl-3 pr-10 py-3 text-base rounded-md shadow-sm text-black focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-          >
-            {cilOptions.map((option) => (
-              <option key={`${eyeKey}-cil-${option.value}`} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label htmlFor={`${eyeKey}-eixo`} className="block text-sm font-medium text-gray-700 mb-1">
-            Eixo
-          </label>
-          <select
-            id={`${eyeKey}-eixo`}
-            name="eixo"
-            value={eyeData.eixo}
-            onChange={(e) => onFieldChange(`${eyeKey}.eixo`, e.target.value)}
-            className="mt-1 block w-full pl-3 pr-10 py-3 text-base rounded-md shadow-sm text-black focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-          >
-            {eixoOptions.map((option) => (
-              <option key={`${eyeKey}-eixo-${option.value}`} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </div>
+const EyeForm = ({ eyeLabel, eyeData, eyeKey, onFieldChange, colorClass }) => (
+  <div className={`bg-white p-6 rounded-lg shadow-lg border-t-4 ${colorClass}`}>
+    <h2 className="text-xl font-semibold mb-4 text-gray-700">{eyeLabel}</h2>
+    <div className="space-y-4">
+      <div>
+        <label htmlFor={`${eyeKey}-esf`} className="block text-sm font-medium text-gray-700 mb-1">Esférico (ESF)</label>
+        <select
+          id={`${eyeKey}-esf`}
+          name="esf"
+          value={eyeData.esf}
+          onChange={(e) => onFieldChange(`${eyeKey}.esf`, e.target.value)}
+          className="mt-1 block w-full pl-3 pr-10 py-3 text-base rounded-md shadow-sm text-black focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+        >
+          {esfOptions.map(o => <option key={`${eyeKey}-esf-${o.value}`} value={o.value}>{o.label}</option>)}
+        </select>
+      </div>
+      <div>
+        <label htmlFor={`${eyeKey}-cil`} className="block text-sm font-medium text-gray-700 mb-1">Cilindro (CIL)</label>
+        <select
+          id={`${eyeKey}-cil`}
+          name="cil"
+          value={eyeData.cil}
+          onChange={(e) => onFieldChange(`${eyeKey}.cil`, e.target.value)}
+          className="mt-1 block w-full pl-3 pr-10 py-3 text-base rounded-md shadow-sm text-black focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+        >
+          {cilOptions.map(o => <option key={`${eyeKey}-cil-${o.value}`} value={o.value}>{o.label}</option>)}
+        </select>
+      </div>
+      <div>
+        <label htmlFor={`${eyeKey}-eixo`} className="block text-sm font-medium text-gray-700 mb-1">Eixo</label>
+        <select
+          id={`${eyeKey}-eixo`}
+          name="eixo"
+          value={eyeData.eixo}
+          onChange={(e) => onFieldChange(`${eyeKey}.eixo`, e.target.value)}
+          className="mt-1 block w-full pl-3 pr-10 py-3 text-base rounded-md shadow-sm text-black focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+        >
+          {eixoOptions.map(o => <option key={`${eyeKey}-eixo-${o.value}`} value={o.value}>{o.label}</option>)}
+        </select>
       </div>
     </div>
-  );
-};
+  </div>
+);
 
 export default function DocumentPage() {
   const { docId } = useParams();
@@ -150,42 +113,60 @@ export default function DocumentPage() {
   const [copyStatus, setCopyStatus] = useState('');
   const [activeUsers, setActiveUsers] = useState([]);
 
-  const [userId] = useState(() => Math.random().toString(36).substring(2, 15));
+  const [userId] = useState(() => Math.random().toString(36).slice(2));
   const [userName, setUserName] = useState('');
   const [userColor, setUserColor] = useState('');
-
   const [userProfile, setUserProfile] = useState(null); // 'doctor' | 'assistant'
   const [selectedPatient, setSelectedPatient] = useState(null);
   const [patients, setPatients] = useState([]);
-
   const [showPatientForm, setShowPatientForm] = useState(false);
   const [showArchivedPatients, setShowArchivedPatients] = useState(false);
 
-  // refs
+  // --- refs estáveis para evitar race conditions ---
+  const currentPatientIdRef = useRef(null);      // SEMPRE usar esse ref para decidir onde gravar
+  const currentPatientRef = useRef(null);        // unsubscribe do listener do paciente atual
+  const rootDocUnsubRef = useRef(null);          // unsubscribe doc raiz
   const presenceRef = useRef(null);
   const presenceIntervalRef = useRef(null);
   const debounceTimeoutRef = useRef(null);
-  const patientUnsubRef = useRef(null);
 
-  // ====== Helpers ======
+  // Lista de pacientes em tempo real
+  useEffect(() => {
+    if (!docId) return;
+    const unsub = subscribeToDocumentPatients(docId, setPatients);
+    return () => unsub && unsub();
+  }, [docId]);
 
-  // Anexa o listener do subdocumento do paciente e atualiza a UI.
-  const attachPatientListener = (patient) => {
-    // cleanup do anterior
-    if (patientUnsubRef.current) {
-      patientUnsubRef.current();
-      patientUnsubRef.current = null;
+  // Identidade local
+  useEffect(() => {
+    let n = localStorage.getItem('collab_user_name');
+    let c = localStorage.getItem('collab_user_color');
+    if (!n) { n = `Usuário ${Math.floor(Math.random() * 1000)}`; localStorage.setItem('collab_user_name', n); }
+    if (!c) { c = getRandomColor(); localStorage.setItem('collab_user_color', c); }
+    setUserName(n); setUserColor(c);
+  }, []);
+
+  // Anexa listener do subdoc do paciente atual (usando ref)
+  const attachPatientListenerById = (patientId, patientName='Paciente Selecionado') => {
+    // atualiza refs
+    currentPatientIdRef.current = patientId;
+
+    // limpa listener anterior
+    if (currentPatientRef.current) {
+      currentPatientRef.current();  // unsubscribe
+      currentPatientRef.current = null;
     }
 
-    setSelectedPatient(patient);
-
-    if (!docId || !patient?.id) {
+    if (!docId || !patientId) {
+      setSelectedPatient(null);
       setDocumentData(initialDocumentData);
       return;
     }
 
-    const patientDocRef = doc(db, 'documents', docId, 'patients', patient.id);
-    patientUnsubRef.current = onSnapshot(
+    setSelectedPatient({ id: patientId, name: patientName });
+
+    const patientDocRef = doc(db, 'documents', docId, 'patients', patientId);
+    const unsub = onSnapshot(
       patientDocRef,
       (snap) => {
         if (snap.exists()) {
@@ -194,8 +175,7 @@ export default function DocumentPage() {
             rightEye: p.rightEye || initialDocumentData.rightEye,
             leftEye: p.leftEye || initialDocumentData.leftEye,
             addition: p.addition || initialDocumentData.addition,
-            annotations:
-              typeof p.annotations === 'string' ? p.annotations : initialDocumentData.annotations,
+            annotations: typeof p.annotations === 'string' ? p.annotations : initialDocumentData.annotations
           });
         } else {
           setDocumentData(initialDocumentData);
@@ -203,56 +183,128 @@ export default function DocumentPage() {
       },
       (err) => console.error('Erro no listener do paciente:', err)
     );
+    currentPatientRef.current = unsub;
   };
 
-  // Atualiza Firestore (doc raiz x subdoc do paciente) preservando dot-notation
+  // Listener do DOC RAIZ: só para seleção compartilhada e presença
+  useEffect(() => {
+    if (!docId || !userId || !userName || !userColor) return;
+
+    const docRef = doc(db, 'documents', docId);
+    rootDocUnsubRef.current = onSnapshot(
+      docRef,
+      (snap) => {
+        if (snap.exists()) {
+          const data = snap.data();
+
+          // Se ninguém selecionado localmente, permita "backfill" com doc raiz
+          if (!currentPatientIdRef.current) {
+            setDocumentData({
+              rightEye: data.rightEye || initialDocumentData.rightEye,
+              leftEye: data.leftEye || initialDocumentData.leftEye,
+              addition: data.addition
+                ? {
+                    active: typeof data.addition.active === 'boolean' ? data.addition.active : false,
+                    value: data.addition.value || initialDocumentData.addition.value
+                  }
+                : initialDocumentData.addition,
+              annotations: typeof data.annotations === 'string' ? data.annotations : ''
+            });
+          }
+
+          // **chave**: sempre que mudar a seleção compartilhada, anexa listener do paciente via REF
+          if (data.selectedPatientId) {
+            if (data.selectedPatientId !== currentPatientIdRef.current) {
+              attachPatientListenerById(data.selectedPatientId, data.selectedPatientName || 'Paciente Selecionado');
+            }
+          } else if (!data.selectedPatientId && currentPatientIdRef.current) {
+            // seleção limpa remotamente
+            attachPatientListenerById(null);
+          }
+        } else {
+          // cria doc raiz se não existir
+          setDoc(docRef, initialDocumentData).catch(e => console.error('Erro ao criar documento raiz:', e));
+          setDocumentData(initialDocumentData);
+        }
+        setLoading(false);
+      },
+      (err) => { console.error('Erro no root listener:', err); setLoading(false); }
+    );
+
+    // Presença
+    const presenceDoc = doc(db, 'documents', docId, 'activeUsers', userId);
+    presenceRef.current = presenceDoc;
+    const touchPresence = async () => {
+      try {
+        await setDoc(presenceDoc, { name: userName, color: userColor, lastSeen: serverTimestamp() }, { merge: true });
+      } catch (e) { console.error('Erro ao tocar presença:', e); }
+    };
+    touchPresence();
+    presenceIntervalRef.current = setInterval(touchPresence, 15000);
+
+    const usersCol = collection(db, 'documents', docId, 'activeUsers');
+    const cleanInactive = async () => {
+      const oneMinAgo = new Date(Date.now() - 60000);
+      const q = query(usersCol, where('lastSeen', '<', oneMinAgo));
+      const snap = await getDocs(q);
+      snap.forEach(async (d) => { try { await deleteDoc(d.ref); } catch {} });
+    };
+    const cleanupTimer = setInterval(cleanInactive, 30000);
+
+    const unsubUsers = onSnapshot(usersCol, (s) => {
+      const arr = s.docs.map(d => ({ id: d.id, ...d.data() }));
+      setActiveUsers(arr);
+    });
+
+    return () => {
+      rootDocUnsubRef.current && rootDocUnsubRef.current();
+      unsubUsers && unsubUsers();
+      clearInterval(cleanupTimer);
+      if (presenceIntervalRef.current) clearInterval(presenceIntervalRef.current);
+      if (presenceRef.current) { deleteDoc(presenceRef.current).catch(()=>{}); }
+      if (currentPatientRef.current) { currentPatientRef.current(); currentPatientRef.current = null; }
+      currentPatientIdRef.current = null;
+    };
+  }, [docId, userId, userName, userColor]); // IMPORTANTE: sem dependência de selectedPatient aqui
+
+  // Escrita unificada SEM depender de selectedPatient (usa a REF)
   const updateDocInFirestore = async (updates) => {
     if (!docId) return;
 
     const keys = Object.keys(updates || {});
-    const touchesPatient =
-      !!selectedPatient &&
-      keys.some(
-        (k) =>
-          k === 'rightEye' ||
-          k.startsWith('rightEye.') ||
-          k === 'leftEye' ||
-          k.startsWith('leftEye.') ||
-          k === 'addition' ||
-          k.startsWith('addition.') ||
-          k === 'annotations'
-      );
+    const isPatientField = keys.some((k) =>
+      k === 'rightEye' || k.startsWith('rightEye.') ||
+      k === 'leftEye'  || k.startsWith('leftEye.')  ||
+      k === 'addition' || k.startsWith('addition.') ||
+      k === 'annotations'
+    );
 
-    if (touchesPatient) {
-      const patientDocRef = doc(db, 'documents', docId, 'patients', selectedPatient.id);
+    const pid = currentPatientIdRef.current;
+
+    if (isPatientField && pid) {
+      const patientDocRef = doc(db, 'documents', docId, 'patients', pid);
       try {
         await updateDoc(patientDocRef, updates);
       } catch {
         try {
-          await setDoc(
-            patientDocRef,
-            {
-              patientId: selectedPatient.id,
-              patientName: selectedPatient.name || '',
-              createdAt: serverTimestamp(),
-            },
-            { merge: true }
-          );
+          await setDoc(patientDocRef, { patientId: pid, patientName: selectedPatient?.name || '', createdAt: serverTimestamp() }, { merge: true });
           await updateDoc(patientDocRef, updates);
         } catch (e) {
-          console.error('Erro ao inicializar/atualizar paciente:', e);
+          console.error('Erro ao atualizar subdocumento do paciente:', e);
         }
       }
     } else {
-      const docRef = doc(db, 'documents', docId);
+      // Atualização global (ex.: selectedPatientId)
+      const rootRef = doc(db, 'documents', docId);
       try {
-        await updateDoc(docRef, updates);
+        await updateDoc(rootRef, updates);
       } catch (e) {
         console.error('Erro ao atualizar documento raiz:', e);
       }
     }
   };
 
+  // Atualiza state local e escreve no Firestore
   const updateField = (path, value) => {
     const keys = path.split('.');
     setDocumentData((prev) => {
@@ -270,221 +322,87 @@ export default function DocumentPage() {
       if (debounceTimeoutRef.current) clearTimeout(debounceTimeoutRef.current);
       debounceTimeoutRef.current = setTimeout(() => {
         updateDocInFirestore({ [path]: value });
-      }, 500);
+      }, 400);
     } else {
       updateDocInFirestore({ [path]: value });
     }
   };
 
-  // ====== Effects ======
-
-  // Pacientes (lista) em tempo real
-  useEffect(() => {
-    if (!docId) return;
-    const unsub = subscribeToDocumentPatients(docId, (list) => setPatients(list));
-    return () => unsub && unsub();
-  }, [docId]);
-
-  // Identidade local (nome/cor)
-  useEffect(() => {
-    let localUserName = localStorage.getItem('collab_user_name');
-    let localUserColor = localStorage.getItem('collab_user_color');
-    if (!localUserName) {
-      localUserName = `Usuário ${Math.floor(Math.random() * 1000)}`;
-      localStorage.setItem('collab_user_name', localUserName);
-    }
-    if (!localUserColor) {
-      localUserColor = getRandomColor();
-      localStorage.setItem('collab_user_color', localUserColor);
-    }
-    setUserName(localUserName);
-    setUserColor(localUserColor);
-  }, []);
-
-  // Documento raiz: cria/observa seleção compartilhada e presença
-  useEffect(() => {
-    if (!docId || !userId || !userName || !userColor) return;
-
-    const docRef = doc(db, 'documents', docId);
-    const unsubscribeDoc = onSnapshot(
-      docRef,
-      (snap) => {
-        if (snap.exists()) {
-          const data = snap.data();
-
-          // se ninguém selecionado localmente, manter UI com dados do doc raiz (backfill)
-          if (!selectedPatient) {
-            const currentData = {
-              rightEye: data.rightEye || { ...initialDocumentData.rightEye },
-              leftEye: data.leftEye || { ...initialDocumentData.leftEye },
-              addition: data.addition
-                ? {
-                    active:
-                      typeof data.addition.active === 'boolean'
-                        ? data.addition.active
-                        : initialDocumentData.addition.active,
-                    value: data.addition.value || initialDocumentData.addition.value,
-                  }
-                : { ...initialDocumentData.addition },
-              annotations:
-                typeof data.annotations === 'string'
-                  ? data.annotations
-                  : initialDocumentData.annotations,
-            };
-            setDocumentData(currentData);
-          }
-
-          // **ponto chave**: sempre que a seleção compartilhada mudar, anexar listener do paciente
-          if (data.selectedPatientId) {
-            if (data.selectedPatientId !== selectedPatient?.id) {
-              const p = {
-                id: data.selectedPatientId,
-                name: data.selectedPatientName || 'Paciente Selecionado',
-              };
-              attachPatientListener(p);
-            }
-          } else if (!data.selectedPatientId && selectedPatient) {
-            // seleção foi limpa remotamente → limpar listener e UI
-            if (patientUnsubRef.current) {
-              patientUnsubRef.current();
-              patientUnsubRef.current = null;
-            }
-            setSelectedPatient(null);
-            setDocumentData(initialDocumentData);
-          }
-        } else {
-          // cria documento raiz se não existir
-          setDoc(docRef, initialDocumentData)
-            .then(() => setDocumentData(initialDocumentData))
-            .catch((e) => console.error('Erro ao criar documento:', e));
-        }
-        setLoading(false);
-      },
-      (e) => {
-        console.error('Erro no root listener:', e);
-        setLoading(false);
-      }
-    );
-
-    // presença
-    presenceRef.current = doc(db, 'documents', docId, 'activeUsers', userId);
-    const updatePresence = async () => {
-      if (!presenceRef.current) return;
-      try {
-        await setDoc(
-          presenceRef.current,
-          { name: userName, color: userColor, lastSeen: serverTimestamp() },
-          { merge: true }
-        );
-      } catch (e) {
-        console.error('Erro ao atualizar presença:', e);
-      }
-    };
-    updatePresence();
-    presenceIntervalRef.current = setInterval(updatePresence, 15000);
-
-    const usersCollectionRef = collection(db, 'documents', docId, 'activeUsers');
-    const cleanupInactiveUsers = async () => {
-      const sixtySecondsAgo = new Date(Date.now() - 60000);
-      const q = query(usersCollectionRef, where('lastSeen', '<', sixtySecondsAgo));
-      const inactiveSnapshot = await getDocs(q);
-      inactiveSnapshot.forEach(async (u) => await deleteDoc(u.ref));
-    };
-    const cleanupInterval = setInterval(cleanupInactiveUsers, 30000);
-
-    const unsubscribeUsers = onSnapshot(usersCollectionRef, (snapshot) => {
-      const users = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
-      setActiveUsers(users);
-    });
-
-    return () => {
-      unsubscribeDoc();
-      unsubscribeUsers();
-      clearInterval(cleanupInterval);
-      if (presenceIntervalRef.current) clearInterval(presenceIntervalRef.current);
-      if (presenceRef.current) {
-        deleteDoc(presenceRef.current).catch((e) => console.error('Erro ao limpar presença:', e));
-      }
-      if (patientUnsubRef.current) {
-        patientUnsubRef.current();
-        patientUnsubRef.current = null;
-      }
-    };
-  }, [docId, userId, userName, userColor, selectedPatient?.id]); // reanexa se id mudar
-
-  // ====== Ações de UI ======
-
   const handleAdditionToggle = () => {
-    if (!documentData || typeof documentData.addition === 'undefined') return;
+    if (!documentData?.addition) return;
     updateField('addition.active', !documentData.addition.active);
   };
 
   const handleReset = async () => {
-    if (!docId) return;
-    const docRef = doc(db, 'documents', docId);
+    // reset no contexto atual: se há paciente, reseta o subdoc; caso contrário, doc raiz
+    const pid = currentPatientIdRef.current;
     try {
-      await setDoc(docRef, initialDocumentData);
-      setDocumentData(initialDocumentData);
+      if (pid) {
+        await updateDocInFirestore({
+          rightEye: initialDocumentData.rightEye,
+          leftEye : initialDocumentData.leftEye,
+          addition: initialDocumentData.addition,
+          annotations: initialDocumentData.annotations
+        });
+        setDocumentData(initialDocumentData);
+      } else {
+        const rootRef = doc(db, 'documents', docId);
+        await setDoc(rootRef, initialDocumentData, { merge: true });
+        setDocumentData(initialDocumentData);
+      }
     } catch (e) {
-      console.error('Erro ao resetar documento:', e);
+      console.error('Erro ao resetar:', e);
     }
   };
 
   const formatEsfericoForCopy = (esfValue) => {
-    const num = parseFloat(esfValue);
-    if (isNaN(num)) return esfValue;
-    return num > 0 ? `+${esfValue}` : esfValue;
+    const n = parseFloat(esfValue);
+    if (isNaN(n)) return esfValue;
+    return n > 0 ? `+${esfValue}` : esfValue;
   };
 
   const handleCopy = async () => {
     if (!documentData) return;
     const { rightEye, leftEye, addition } = documentData;
 
-    let additionValueText = '';
+    let addTxt = '';
     if (addition.active && addition.value) {
-      const val = addition.value.toString();
-      additionValueText = val.startsWith('+') ? val : `+${val}`;
+      const v = addition.value.toString();
+      addTxt = v.startsWith('+') ? v : `+${v}`;
     }
-
-    const rightEsfFormatted = formatEsfericoForCopy(rightEye.esf);
-    const leftEsfFormatted = formatEsfericoForCopy(leftEye.esf);
 
     const tableRows = [
       ['', 'ESF', 'CIL', 'Eixo'],
-      ['Olho Direito', rightEsfFormatted, rightEye.cil, rightEye.eixo],
-      ['Olho Esquerdo', leftEsfFormatted, leftEye.cil, leftEye.eixo],
-      [addition.active ? 'Para perto' : '', addition.active ? `Adição ${additionValueText} (AO)` : '', '', ''],
+      ['Olho Direito', formatEsfericoForCopy(rightEye.esf), rightEye.cil, rightEye.eixo],
+      ['Olho Esquerdo', formatEsfericoForCopy(leftEye.esf), leftEye.cil, leftEye.eixo],
+      [addition.active ? 'Para perto' : '', addition.active ? `Adição ${addTxt} (AO)` : '', '', '']
     ];
 
-    let htmlTable =
-      '<table style="border-collapse: collapse; font-family: Arial, sans-serif; font-size: 10pt;"><tbody>';
-    tableRows.forEach((row, rowIndex) => {
-      htmlTable += '<tr>';
-      row.forEach((cell, cellIndex) => {
-        const isHeader = rowIndex === 0;
-        const cellWidth = cellIndex === 0 ? '120px' : '80px';
-        const cellAlign = cellIndex === 0 ? 'left' : 'center';
-        const cellStyle = `border: 1px solid black; padding: 4px; width: ${cellWidth}; text-align: ${cellAlign}; ${
-          isHeader ? 'font-weight: bold; background-color: #f0f0f0;' : ''
-        }`;
-        const tag = isHeader ? 'th' : 'td';
-        htmlTable += `<${tag} style="${cellStyle}">${cell}</${tag}>`;
+    let html = '<table style="border-collapse: collapse; font-family: Arial, sans-serif; font-size: 10pt;"><tbody>';
+    tableRows.forEach((row, i) => {
+      html += '<tr>';
+      row.forEach((cell, j) => {
+        const header = i === 0;
+        const w = j === 0 ? '120px' : '80px';
+        const align = j === 0 ? 'left' : 'center';
+        const style = `border: 1px solid black; padding: 4px; width: ${w}; text-align: ${align}; ${header ? 'font-weight: bold; background-color: #f0f0f0;' : ''}`;
+        html += `<${header ? 'th' : 'td'} style="${style}">${cell}</${header ? 'th' : 'td'}>`;
       });
-      htmlTable += '</tr>';
+      html += '</tr>';
     });
-    htmlTable += '</tbody></table>';
+    html += '</tbody></table>';
 
-    const tsvData = tableRows.map((row) => row.join('\t')).join('\n');
+    const tsv = tableRows.map(r => r.join('\t')).join('\n');
 
     try {
-      const blobHtml = new Blob([htmlTable], { type: 'text/html' });
-      const blobText = new Blob([tsvData], { type: 'text/plain' });
-      const clipboardItem = new ClipboardItem({ 'text/html': blobHtml, 'text/plain': blobText });
-      await navigator.clipboard.write([clipboardItem]);
+      const blobHtml = new Blob([html], { type: 'text/html' });
+      const blobText = new Blob([tsv], { type: 'text/plain' });
+      const item = new ClipboardItem({ 'text/html': blobHtml, 'text/plain': blobText });
+      await navigator.clipboard.write([item]);
       setCopyStatus('Copiado!');
-    } catch (_) {
+    } catch {
       try {
-        await navigator.clipboard.writeText(tsvData);
+        await navigator.clipboard.writeText(tsv);
         setCopyStatus('Copiado como texto simples!');
       } catch {
         setCopyStatus('Falha ao copiar.');
@@ -493,11 +411,9 @@ export default function DocumentPage() {
     setTimeout(() => setCopyStatus(''), 3000);
   };
 
-  const handleProfileSelect = (profile) => setUserProfile(profile);
-
-  // Clicador: anexa listener do paciente **e** publica seleção
+  // Clique local: seleciona paciente e publica seleção (e já anexa listener pelo id)
   const handlePatientSelect = async (patient) => {
-    attachPatientListener(patient);
+    attachPatientListenerById(patient?.id || null, patient?.name || 'Paciente Selecionado');
     if (patient?.id) {
       await updateDocInFirestore({
         selectedPatientId: patient.id,
@@ -509,13 +425,7 @@ export default function DocumentPage() {
   };
 
   const handleBackToPatients = async () => {
-    if (patientUnsubRef.current) {
-      patientUnsubRef.current();
-      patientUnsubRef.current = null;
-    }
-    setSelectedPatient(null);
-    setDocumentData(initialDocumentData);
-
+    attachPatientListenerById(null);
     try {
       await updateDocInFirestore({
         selectedPatientId: null,
@@ -529,8 +439,8 @@ export default function DocumentPage() {
   };
 
   const handleBackToProfile = () => {
+    attachPatientListenerById(null);
     setUserProfile(null);
-    setSelectedPatient(null);
     setShowPatientForm(false);
   };
 
@@ -539,19 +449,8 @@ export default function DocumentPage() {
   const handleArchivePatient = async (patientId) => {
     try {
       await archivePatient(patientId);
-      if (selectedPatient?.id === patientId) {
-        if (patientUnsubRef.current) {
-          patientUnsubRef.current();
-          patientUnsubRef.current = null;
-        }
-        setSelectedPatient(null);
-        setDocumentData(initialDocumentData);
-        await updateDocInFirestore({
-          selectedPatientId: null,
-          selectedPatientName: null,
-          selectedBy: null,
-          selectedAt: serverTimestamp(),
-        });
+      if (currentPatientIdRef.current === patientId) {
+        await handleBackToPatients();
       }
     } catch (e) {
       console.error('Erro ao arquivar paciente:', e);
@@ -561,25 +460,21 @@ export default function DocumentPage() {
 
   const handleQuickCare = async () => {
     try {
-      const randomNumber = Math.floor(Math.random() * 100000);
-      const quickPatientName = `Paciente #${randomNumber}`;
-      const quickPatient = {
-        id: `quick_${Date.now()}_${randomNumber}`,
-        name: quickPatientName,
+      const n = Math.floor(Math.random() * 100000);
+      const name = `Paciente #${n}`;
+      const p = {
+        id: `quick_${Date.now()}_${n}`,
+        name,
         status: 'active',
         createdAt: new Date(),
         documentId: docId,
         isQuickCare: true,
-        exams: { ar: null, tonometry: null },
+        exams: { ar: null, tonometry: null }
       };
-
       try {
-        await createPatient(quickPatient.name, docId, quickPatient.exams, quickPatient.id);
-      } catch (e) {
-        console.error('Erro ao salvar quick patient:', e);
-      }
-
-      await handlePatientSelect(quickPatient);
+        await createPatient(p.name, docId, p.exams, p.id);
+      } catch (e) { console.error('Erro ao salvar paciente rápido:', e); }
+      await handlePatientSelect(p);
     } catch (e) {
       console.error('Erro no atendimento rápido:', e);
       alert('Erro ao iniciar atendimento rápido');
@@ -588,10 +483,7 @@ export default function DocumentPage() {
 
   const handleGeneratePrescription = () => {
     try {
-      if (!selectedPatient) {
-        alert('Nenhum paciente selecionado');
-        return;
-      }
+      if (!selectedPatient) return alert('Nenhum paciente selecionado');
       const fileName = generatePrescriptionPDF(selectedPatient, documentData);
       alert(`Receita gerada com sucesso: ${fileName}`);
     } catch (e) {
@@ -600,13 +492,10 @@ export default function DocumentPage() {
     }
   };
 
-  // ====== UI render ======
+  const renderArchivedModal = () =>
+    showArchivedPatients ? <ArchivedPatients documentId={docId} onClose={() => setShowArchivedPatients(false)} /> : null;
 
-  const renderArchivedModal = () => {
-    if (!showArchivedPatients) return null;
-    return <ArchivedPatients documentId={docId} onClose={() => setShowArchivedPatients(false)} />;
-  };
-
+  // ------- UI -------
   if (loading || !documentData) {
     return (
       <>
@@ -627,10 +516,7 @@ export default function DocumentPage() {
         <div className="flex justify-center items-center h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
           <div className="text-center">
             <p className="text-red-600 text-lg">ID do documento não fornecido.</p>
-            <button
-              onClick={() => router.push('/')}
-              className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-            >
+            <button onClick={() => router.push('/')} className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
               Voltar ao Início
             </button>
           </div>
@@ -652,12 +538,7 @@ export default function DocumentPage() {
                 Usuário: <span style={{ color: userColor, fontWeight: 'bold' }}>{userName}</span>
               </p>
             </div>
-            <ProfileSelector
-              onProfileSelect={setUserProfile}
-              documentId={docId}
-              userName={userName}
-              userColor={userColor}
-            />
+            <ProfileSelector onProfileSelect={setUserProfile} documentId={docId} userName={userName} userColor={userColor} />
           </div>
         </div>
         {renderArchivedModal()}
@@ -672,22 +553,17 @@ export default function DocumentPage() {
         <div className="min-h-screen bg-gradient-to-br from-green-50 to-emerald-100">
           <div className="container mx-auto p-4">
             <div className="flex items-center justify-between mb-6">
-              <button
-                onClick={() => setShowPatientForm(false)}
-                className="flex items-center text-gray-600 hover:text-gray-800"
-              >
-                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                </svg>
+              <button onClick={() => setShowPatientForm(false)} className="flex items-center text-gray-600 hover:text-gray-800">
+                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
                 Voltar
               </button>
               <div className="text-center">
                 <h1 className="text-2xl font-bold text-gray-800">Criar Paciente</h1>
                 <p className="text-sm text-gray-600">Documento: {docId}</p>
               </div>
-              <div></div>
+              <div />
             </div>
-            <PatientCreationForm documentId={docId} onPatientCreated={() => setShowPatientForm(false)} />
+            <PatientCreationForm documentId={docId} onPatientCreated={handlePatientCreated} />
           </div>
           {renderArchivedModal()}
         </div>
@@ -699,22 +575,15 @@ export default function DocumentPage() {
         <div className="container mx-auto p-4">
           <div className="flex items-center justify-between mb-6">
             <button onClick={() => setUserProfile(null)} className="flex items-center text-gray-600 hover:text-gray-800">
-              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-              </svg>
+              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
               Trocar Perfil
             </button>
             <div className="text-center">
               <h1 className="text-3xl font-bold text-gray-800">Assistente</h1>
               <p className="text-gray-600">Documento: {docId}</p>
-              <p className="text-sm text-gray-500">
-                Usuário: <span style={{ color: userColor, fontWeight: 'bold' }}>{userName}</span>
-              </p>
+              <p className="text-sm text-gray-500">Usuário: <span style={{ color: userColor, fontWeight: 'bold' }}>{userName}</span></p>
             </div>
-            <button
-              onClick={() => setShowPatientForm(true)}
-              className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md font-medium"
-            >
+            <button onClick={() => setShowPatientForm(true)} className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md font-medium">
               Criar Paciente
             </button>
           </div>
@@ -722,28 +591,20 @@ export default function DocumentPage() {
           <div className="bg-white rounded-lg shadow-lg p-6">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-semibold text-gray-800">Pacientes Ativos</h2>
-              <button
-                onClick={() => setShowArchivedPatients(true)}
-                className="bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-2 rounded-md text-sm font-medium"
-              >
+              <button onClick={() => setShowArchivedPatients(true)} className="bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-2 rounded-md text-sm font-medium">
                 Ver Arquivados
               </button>
             </div>
             {patients.length === 0 ? (
               <div className="text-center py-8">
                 <p className="text-gray-500 mb-4">Nenhum paciente criado ainda</p>
-                <button
-                  onClick={() => setShowPatientForm(true)}
-                  className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-md font-medium"
-                >
+                <button onClick={() => setShowPatientForm(true)} className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-md font-medium">
                   Criar Primeiro Paciente
                 </button>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {patients.map((patient) => (
-                  <PatientCard key={patient.id} patient={patient} onArchive={handleArchivePatient} />
-                ))}
+                {patients.map(p => <PatientCard key={p.id} patient={p} onArchive={handleArchivePatient} />)}
               </div>
             )}
           </div>
@@ -751,12 +612,10 @@ export default function DocumentPage() {
           <div className="mt-6 bg-white rounded-lg shadow-lg p-6">
             <h2 className="text-lg font-semibold mb-3 text-gray-700">Usuários Ativos ({activeUsers.length})</h2>
             <div className="flex flex-wrap gap-2">
-              {activeUsers.map((user) => (
-                <div key={user.id} className="flex items-center bg-gray-100 rounded-full px-3 py-1">
-                  <span className="w-3 h-3 rounded-full mr-2" style={{ backgroundColor: user.color || 'gray' }} />
-                  <span className="text-sm font-medium" style={{ color: user.color || 'black' }}>
-                    {user.name}
-                  </span>
+              {activeUsers.map(u => (
+                <div key={u.id} className="flex items-center bg-gray-100 rounded-full px-3 py-1">
+                  <span className="w-3 h-3 rounded-full mr-2" style={{ backgroundColor: u.color || 'gray' }}></span>
+                  <span className="text-sm font-medium" style={{ color: u.color || 'black' }}>{u.name}</span>
                 </div>
               ))}
             </div>
@@ -775,51 +634,23 @@ export default function DocumentPage() {
           <div className="container mx-auto p-4">
             <div className="flex items-center justify-between mb-6">
               <button onClick={() => setUserProfile(null)} className="flex items-center text-gray-600 hover:text-gray-800">
-                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                </svg>
+                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
                 Trocar Perfil
               </button>
               <div className="text-center">
                 <h1 className="text-3xl font-bold text-gray-800">Médico</h1>
                 <p className="text-gray-600">Documento: {docId}</p>
-                <p className="text-sm text-gray-500">
-                  Usuário: <span style={{ color: userColor, fontWeight: 'bold' }}>{userName}</span>
-                </p>
+                <p className="text-sm text-gray-500">Usuário: <span style={{ color: userColor, fontWeight: 'bold' }}>{userName}</span></p>
               </div>
               <div className="flex space-x-3">
-                <button
-                  onClick={() => setShowArchivedPatients(true)}
-                  className="bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-2 rounded-md text-sm font-medium"
-                >
+                <button onClick={() => setShowArchivedPatients(true)} className="bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-2 rounded-md text-sm font-medium">
                   Ver Arquivados
                 </button>
                 <button
-                  onClick={async () => {
-                    // atendimento rápido
-                    const n = Math.floor(Math.random() * 100000);
-                    const quickName = `Paciente #${n}`;
-                    const qp = {
-                      id: `quick_${Date.now()}_${n}`,
-                      name: quickName,
-                      status: 'active',
-                      createdAt: new Date(),
-                      documentId: docId,
-                      isQuickCare: true,
-                      exams: { ar: null, tonometry: null },
-                    };
-                    try {
-                      await createPatient(qp.name, docId, qp.exams, qp.id);
-                    } catch (e) {
-                      console.error('Erro ao salvar paciente rápido:', e);
-                    }
-                    await handlePatientSelect(qp);
-                  }}
+                  onClick={handleQuickCare}
                   className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium flex items-center"
                 >
-                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                  </svg>
+                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
                   Atendimento Rápido
                 </button>
               </div>
@@ -836,32 +667,20 @@ export default function DocumentPage() {
       );
     }
 
-    // Interface integrada
     return (
       <div className="container mx-auto p-4 flex flex-col min-h-screen bg-gray-100">
         <header className="mb-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
-              <button
-                onClick={handleBackToPatients}
-                className="text-gray-500 hover:text-gray-700 transition-colors"
-                title="Voltar para lista de pacientes"
-              >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                </svg>
+              <button onClick={handleBackToPatients} className="text-gray-500 hover:text-gray-700 transition-colors" title="Voltar para lista de pacientes">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
               </button>
               <div>
                 <h1 className="text-3xl font-bold text-gray-800">EyeNote</h1>
                 <p className="text-sm text-gray-600">
                   Paciente: <span className="font-semibold">{selectedPatient.name}</span>
-                  {selectedPatient.isQuickCare && (
-                    <span className="ml-2 px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">
-                      Atendimento Rápido
-                    </span>
-                  )}{' '}
-                  | Documento: {docId} |{' '}
-                  Editando como: <span style={{ color: userColor, fontWeight: 'bold' }}>{userName}</span>
+                  {selectedPatient.isQuickCare && <span className="ml-2 px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">Atendimento Rápido</span>}
+                  {' '}| Documento: {docId} | Editando como: <span style={{ color: userColor, fontWeight: 'bold' }}>{userName}</span>
                 </p>
               </div>
             </div>
@@ -871,20 +690,8 @@ export default function DocumentPage() {
         <div className="flex flex-grow flex-col lg:flex-row gap-6">
           <main className="flex-grow lg:w-[62%]">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <EyeForm
-                eyeLabel="Olho Direito (OD)"
-                eyeData={documentData.rightEye}
-                eyeKey="rightEye"
-                onFieldChange={updateField}
-                colorClass="border-blue-500"
-              />
-              <EyeForm
-                eyeLabel="Olho Esquerdo (OE)"
-                eyeData={documentData.leftEye}
-                eyeKey="leftEye"
-                onFieldChange={updateField}
-                colorClass="border-green-500"
-              />
+              <EyeForm eyeLabel="Olho Direito (OD)" eyeData={documentData.rightEye} eyeKey="rightEye" onFieldChange={updateField} colorClass="border-blue-500" />
+              <EyeForm eyeLabel="Olho Esquerdo (OE)" eyeData={documentData.leftEye} eyeKey="leftEye" onFieldChange={updateField} colorClass="border-green-500" />
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
               <div className="bg-white p-6 rounded-lg shadow-lg border-t-4 border-purple-500">
@@ -892,44 +699,23 @@ export default function DocumentPage() {
                 <div className="flex items-center mb-4">
                   <label htmlFor="addition-toggle" className="flex items-center cursor-pointer">
                     <div className="relative">
-                      <input
-                        type="checkbox"
-                        id="addition-toggle"
-                        className="sr-only"
-                        checked={documentData.addition?.active || false}
-                        onChange={handleAdditionToggle}
-                      />
-                      <div
-                        className={`block w-14 h-8 rounded-full ${
-                          documentData.addition?.active ? 'bg-purple-600' : 'bg-gray-300'
-                        }`}
-                      ></div>
-                      <div
-                        className={`dot absolute left-1 top-1 bg-white w-6 h-6 rounded-full transition-transform ${
-                          documentData.addition?.active ? 'translate-x-6' : ''
-                        }`}
-                      ></div>
+                      <input type="checkbox" id="addition-toggle" className="sr-only" checked={documentData.addition?.active || false} onChange={handleAdditionToggle} />
+                      <div className={`block w-14 h-8 rounded-full ${documentData.addition?.active ? 'bg-purple-600' : 'bg-gray-300'}`}></div>
+                      <div className={`dot absolute left-1 top-1 bg-white w-6 h-6 rounded-full transition-transform ${documentData.addition?.active ? 'translate-x-6' : ''}`}></div>
                     </div>
                     <div className="ml-3 text-gray-700 font-medium">Ativar Adição</div>
                   </label>
                 </div>
                 {documentData.addition?.active && (
                   <div>
-                    <label htmlFor="addition-value" className="block text-sm font-medium text-gray-700 mb-1">
-                      Valor da Adição
-                    </label>
+                    <label htmlFor="addition-value" className="block text-sm font-medium text-gray-700 mb-1">Valor da Adição</label>
                     <select
                       id="addition-value"
-                      name="additionValue"
                       value={documentData.addition.value}
                       onChange={(e) => updateField('addition.value', e.target.value)}
                       className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md shadow-sm text-black"
                     >
-                      {additionOptions.map((option) => (
-                        <option key={`addition-${option.value}`} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
+                      {additionOptions.map(o => <option key={`addition-${o.value}`} value={o.value}>{o.label}</option>)}
                     </select>
                   </div>
                 )}
@@ -949,53 +735,22 @@ export default function DocumentPage() {
             <div className="mt-6 bg-white p-6 rounded-lg shadow-lg border-t-4 border-gray-500">
               <h2 className="text-xl font-semibold mb-4 text-gray-700">Controles</h2>
               <div className="flex flex-wrap gap-4">
-                <button
-                  onClick={handleReset}
-                  className="px-6 py-2 bg-red-500 hover:bg-red-600 text-white font-semibold rounded-md shadow-sm transition duration-150 ease-in-out focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-opacity-50"
-                >
-                  Resetar Valores
-                </button>
-                <button
-                  onClick={handleCopy}
-                  className="px-6 py-2 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded-md shadow-sm transition duration-150 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
-                >
-                  {copyStatus || 'Copiar para Tabela'}
-                </button>
-                <button
-                  onClick={() => handleArchivePatient(selectedPatient.id)}
-                  className="px-6 py-2 bg-yellow-600 hover:bg-yellow-700 text-white font-semibold rounded-md shadow-sm transition duration-150 ease-in-out focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:ring-opacity-50"
-                >
-                  Arquivar Paciente
-                </button>
-                <button
-                  onClick={handleGeneratePrescription}
-                  className="px-6 py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-md shadow-sm transition duration-150 ease-in-out focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-opacity-50"
-                >
-                  Gerar Receita
-                </button>
+                <button onClick={handleReset} className="px-6 py-2 bg-red-500 hover:bg-red-600 text-white font-semibold rounded-md shadow-sm">Resetar Valores</button>
+                <button onClick={handleCopy} className="px-6 py-2 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded-md shadow-sm">{copyStatus || 'Copiar para Tabela'}</button>
+                <button onClick={() => handleArchivePatient(selectedPatient.id)} className="px-6 py-2 bg-yellow-600 hover:bg-yellow-700 text-white font-semibold rounded-md shadow-sm">Arquivar Paciente</button>
+                <button onClick={handleGeneratePrescription} className="px-6 py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-md shadow-sm">Gerar Receita</button>
               </div>
             </div>
 
             <div className="mt-6 bg-white p-6 rounded-lg shadow-lg border-t-4 border-indigo-500">
               <h2 className="text-xl font-semibold mb-4 text-gray-700">Usuários Ativos ({activeUsers.length})</h2>
               <div className="flex flex-wrap gap-3">
-                {activeUsers.map((user) => (
-                  <div
-                    key={user.id}
-                    className="flex items-center bg-gray-50 hover:bg-gray-100 rounded-full px-4 py-2 transition-colors duration-200 border border-gray-200"
-                  >
-                    <span
-                      className="w-3 h-3 rounded-full mr-3 border border-white shadow-sm"
-                      style={{ backgroundColor: user.color || '#6B7280' }}
-                    ></span>
-                    <span className="text-sm font-medium" style={{ color: user.color || '#374151' }}>
-                      {user.name}
-                    </span>
+                {activeUsers.map(u => (
+                  <div key={u.id} className="flex items-center bg-gray-50 hover:bg-gray-100 rounded-full px-4 py-2 border border-gray-200">
+                    <span className="w-3 h-3 rounded-full mr-3 border border-white shadow-sm" style={{ backgroundColor: u.color || '#6B7280' }}></span>
+                    <span className="text-sm font-medium" style={{ color: u.color || '#374151' }}>{u.name}</span>
                   </div>
                 ))}
-              </div>
-              <div className="mt-4 pt-4 border-t border-gray-200">
-                <p className="text-xs text-gray-500 text-center">Usuários conectados em tempo real neste documento</p>
               </div>
             </div>
           </main>
