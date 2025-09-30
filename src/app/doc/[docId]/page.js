@@ -35,7 +35,7 @@ const initialDocumentData = {
     active: false,
     value: '+0.75',
   },
-  annotations: '', 
+  annotations: '',
 };
 
 const generateOptions = (start, end, step, formatFixed = 2) => {
@@ -166,6 +166,39 @@ export default function DocumentPage() {
     setUserColor(localUserColor);
   }, []);
 
+  // Helper: anexa o listener do subdoc do paciente localmente (sem broadcast)
+  const attachPatientListener = (patient) => {
+    // cleanup do listener anterior
+    if (patientUnsubRef.current) {
+      patientUnsubRef.current();
+      patientUnsubRef.current = null;
+    }
+
+    setSelectedPatient(patient);
+
+    if (patient && patient.id) {
+      const patientDocRef = doc(db, 'documents', docId, 'patients', patient.id);
+
+      patientUnsubRef.current = onSnapshot(patientDocRef, (snap) => {
+        if (snap.exists()) {
+          const patientData = snap.data();
+          setDocumentData({
+            rightEye: patientData.rightEye || initialDocumentData.rightEye,
+            leftEye: patientData.leftEye || initialDocumentData.leftEye,
+            addition: patientData.addition || initialDocumentData.addition,
+            annotations: typeof patientData.annotations === 'string'
+              ? patientData.annotations
+              : initialDocumentData.annotations,
+          });
+        } else {
+          setDocumentData(initialDocumentData);
+        }
+      }, (err) => {
+        console.error('Erro no listener do paciente:', err);
+      });
+    }
+  };
+
   useEffect(() => {
     if (!docId || !userId || !userName || !userColor) return;
     const docRef = doc(db, 'documents', docId);
@@ -173,29 +206,36 @@ export default function DocumentPage() {
       if (docSnap.exists()) {
         const data = docSnap.data();
         const currentData = {
-            rightEye: data.rightEye || { ...initialDocumentData.rightEye },
-            leftEye: data.leftEye || { ...initialDocumentData.leftEye },
-            addition: data.addition ? { active: typeof data.addition.active === 'boolean' ? data.addition.active : initialDocumentData.addition.active, value: data.addition.value || initialDocumentData.addition.value } : { ...initialDocumentData.addition },
-            annotations: typeof data.annotations === 'string' ? data.annotations : initialDocumentData.annotations, 
+          rightEye: data.rightEye || { ...initialDocumentData.rightEye },
+          leftEye: data.leftEye || { ...initialDocumentData.leftEye },
+          addition: data.addition ? { active: typeof data.addition.active === 'boolean' ? data.addition.active : initialDocumentData.addition.active, value: data.addition.value || initialDocumentData.addition.value } : { ...initialDocumentData.addition },
+          annotations: typeof data.annotations === 'string' ? data.annotations : initialDocumentData.annotations, 
         };
+        // Se não houver paciente selecionado localmente, usamos os dados do documento raiz
         if (!selectedPatient) {
-            setDocumentData(currentData);
+          setDocumentData(currentData);
+        }
+
+        // ====== Sincronizar seleção de paciente entre usuários (e eu mesmo) ======
+        if (data.selectedPatientId) {
+          // Se mudou o paciente selecionado (por mim ou por outro), anexar listener local
+          if (data.selectedPatientId !== selectedPatient?.id) {
+            const syncPatient = {
+              id: data.selectedPatientId,
+              name: data.selectedPatientName || 'Paciente Selecionado',
+            };
+            attachPatientListener(syncPatient);
           }
-        
-                // Sincronizar seleção de paciente entre usuários
-            if (data.selectedPatientId && data.selectedBy !== userName) {
-              // Buscar dados do paciente selecionado por outro usuário
-              if (data.selectedPatientId !== selectedPatient?.id) {
-                const syncPatient = {
-                  id: data.selectedPatientId,
-                  name: data.selectedPatientName || 'Paciente Selecionado',
-                };
-                setSelectedPatient(syncPatient);
-              }
-            } else if (!data.selectedPatientId && selectedPatient) {
-              // Se a seleção foi limpa por outro usuário, voltar para a lista
-              setSelectedPatient(null);
-            }
+        } else if (!data.selectedPatientId && selectedPatient) {
+          // Seleção foi limpa no Firestore: remover listener e voltar para a lista
+          if (patientUnsubRef.current) {
+            patientUnsubRef.current();
+            patientUnsubRef.current = null;
+          }
+          setSelectedPatient(null);
+          setDocumentData(initialDocumentData);
+        }
+        // ====== fim sync ======
         
       } else {
         setDoc(docRef, initialDocumentData).then(() => {
@@ -243,55 +283,59 @@ export default function DocumentPage() {
       if (presenceRef.current) {
         deleteDoc(presenceRef.current).catch(e => console.error("Erro ao limpar presença: ", e));
       }
+      // cleanup do listener do paciente ao desmontar
+      if (patientUnsubRef.current) {
+        patientUnsubRef.current();
+        patientUnsubRef.current = null;
+      }
     };
-  }, [docId, userId, userName, userColor]);
+  }, [docId, userId, userName, userColor, selectedPatient]);
 
-const updateDocInFirestore = async (updates) => {
-  if (!docId) return;
+  // Atualização unificada (doc raiz x subdoc de paciente) com dot-notation preservada
+  const updateDocInFirestore = async (updates) => {
+    if (!docId) return;
 
-  // Detecta updates do paciente (inclui dot notation)
-  const keys = Object.keys(updates || {});
-  const touchesPatient = !!selectedPatient && keys.some((k) => (
-    k === 'rightEye' || k.startsWith('rightEye.') ||
-    k === 'leftEye'  || k.startsWith('leftEye.')  ||
-    k === 'addition' || k.startsWith('addition.') ||
-    k === 'annotations'
-  ));
+    // Detecta updates do paciente (inclui dot notation)
+    const keys = Object.keys(updates || {});
+    const touchesPatient = !!selectedPatient && keys.some((k) => (
+      k === 'rightEye' || k.startsWith('rightEye.') ||
+      k === 'leftEye'  || k.startsWith('leftEye.')  ||
+      k === 'addition' || k.startsWith('addition.') ||
+      k === 'annotations'
+    ));
 
-  if (touchesPatient) {
-    const patientDocRef = doc(db, 'documents', docId, 'patients', selectedPatient.id);
-    try {
-      // Se o subdoc já existe, isso funciona e mantém dot notation
-      await updateDoc(patientDocRef, updates);
-    } catch (error) {
-      // Se NÃO existe, inicializa o subdoc (sem dot notation) e depois aplica o update com dot notation
+    if (touchesPatient) {
+      const patientDocRef = doc(db, 'documents', docId, 'patients', selectedPatient.id);
       try {
-        await setDoc(
-          patientDocRef,
-          {
-            patientId: selectedPatient.id,
-            patientName: selectedPatient.name || '',
-            createdAt: serverTimestamp(),
-          },
-          { merge: true } // importantíssimo: não sobrescrever nada existente
-        );
-        await updateDoc(patientDocRef, updates); // agora o doc existe e dot notation funciona
-      } catch (createError) {
-        console.error('Erro ao inicializar/atualizar subdocumento do paciente:', createError);
+        // Se o subdoc já existe, atualiza mantendo dot-notation
+        await updateDoc(patientDocRef, updates);
+      } catch (error) {
+        // Se NÃO existe, inicializa e depois aplica o update com dot-notation
+        try {
+          await setDoc(
+            patientDocRef,
+            {
+              patientId: selectedPatient.id,
+              patientName: selectedPatient.name || '',
+              createdAt: serverTimestamp(),
+            },
+            { merge: true } // não sobrescrever
+          );
+          await updateDoc(patientDocRef, updates);
+        } catch (createError) {
+          console.error('Erro ao inicializar/atualizar subdocumento do paciente:', createError);
+        }
+      }
+    } else {
+      // Atualizações globais do documento (seleção de paciente, flags, etc.)
+      const docRef = doc(db, 'documents', docId);
+      try {
+        await updateDoc(docRef, updates);
+      } catch (error) {
+        console.error('Erro ao atualizar documento raiz:', error);
       }
     }
-  } else {
-    // Atualizações globais do documento (seleção de paciente, flags, etc.)
-    const docRef = doc(db, 'documents', docId);
-    try {
-      await updateDoc(docRef, updates);
-    } catch (error) {
-      console.error('Erro ao atualizar documento raiz:', error);
-    }
-  }
-};
-
-
+  };
 
   const updateField = (path, value) => {
     const keys = path.split('.');
@@ -395,52 +439,26 @@ const updateDocInFirestore = async (updates) => {
     setUserProfile(profile);
   };
 
+  // Seleção feita LOCALMENTE (clicador) → anexa listener + broadcast no Firestore
   const handlePatientSelect = async (patient) => {
-  // Atualiza seleção local
-  setSelectedPatient(patient);
+    // Anexa listener local (e atualiza UI imediatamente)
+    attachPatientListener(patient);
 
-  // Cleanup do listener anterior (se houver)
-  if (patientUnsubRef.current) {
-    patientUnsubRef.current();
-    patientUnsubRef.current = null;
-  }
-
-  if (patient && patient.id) {
-    const patientDocRef = doc(db, 'documents', docId, 'patients', patient.id);
-
-    // Listener em tempo real do subdoc do paciente
-    patientUnsubRef.current = onSnapshot(patientDocRef, (snap) => {
-      if (snap.exists()) {
-        const patientData = snap.data();
-        setDocumentData({
-          rightEye: patientData.rightEye || initialDocumentData.rightEye,
-          leftEye: patientData.leftEye || initialDocumentData.leftEye,
-          addition: patientData.addition || initialDocumentData.addition,
-          annotations: typeof patientData.annotations === 'string'
-            ? patientData.annotations
-            : initialDocumentData.annotations,
-        });
-      } else {
-        setDocumentData(initialDocumentData);
-      }
-    }, (err) => {
-      console.error('Erro no listener do paciente:', err);
-    });
-
-    // Sincronizar seleção no documento para os demais devices
-    await updateDocInFirestore({
-      selectedPatientId: patient.id,
-      selectedPatientName: patient.name || '',
-      selectedBy: userName,
-      selectedAt: serverTimestamp(),
-    });
-  }
-};
+    // Sincroniza a seleção no Firestore para os demais devices
+    if (patient && patient.id) {
+      await updateDocInFirestore({
+        selectedPatientId: patient.id,
+        selectedPatientName: patient.name || '',
+        selectedBy: userName,
+        selectedAt: serverTimestamp(),
+      });
+    }
+  };
 
   const handleBackToPatients = async () => {
-  if (patientUnsubRef.current) { patientUnsubRef.current(); patientUnsubRef.current = null; }
-
+    if (patientUnsubRef.current) { patientUnsubRef.current(); patientUnsubRef.current = null; }
     setSelectedPatient(null);
+    setDocumentData(initialDocumentData);
     
     // Limpar seleção de paciente no documento para outros usuários
     try {
@@ -466,25 +484,26 @@ const updateDocInFirestore = async (updates) => {
     // Não precisa recarregar - o listener em tempo real já atualiza automaticamente
   };
 
-const handleArchivePatient = async (patientId) => {
-  try {
-    await archivePatient(patientId); // mantém seu util original
+  const handleArchivePatient = async (patientId) => {
+    try {
+      await archivePatient(patientId); // mantém seu util original
 
-    // Se o paciente arquivado estava selecionado neste doc, limpar seleção compartilhada
-    if (selectedPatient?.id === patientId) {
-      await updateDocInFirestore({
-        selectedPatientId: null,
-        selectedPatientName: null,
-        selectedBy: null,
-        selectedAt: serverTimestamp(),
-      });
-      setSelectedPatient(null);
+      // Se o paciente arquivado estava selecionado neste doc, limpar seleção compartilhada
+      if (selectedPatient?.id === patientId) {
+        await updateDocInFirestore({
+          selectedPatientId: null,
+          selectedPatientName: null,
+          selectedBy: null,
+          selectedAt: serverTimestamp(),
+        });
+        setSelectedPatient(null);
+        setDocumentData(initialDocumentData);
+      }
+    } catch (error) {
+      console.error('Erro ao arquivar paciente:', error);
+      alert('Erro ao arquivar paciente');
     }
-  } catch (error) {
-    console.error('Erro ao arquivar paciente:', error);
-    alert('Erro ao arquivar paciente');
-  }
-};
+  };
 
   const handleQuickCare = async () => {
     try {
@@ -974,4 +993,3 @@ const handleArchivePatient = async (patientId) => {
 
   return null;
 }
-
