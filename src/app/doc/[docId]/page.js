@@ -73,7 +73,7 @@ const EyeForm = ({ eyeLabel, eyeData, eyeKey, onFieldChange, colorClass }) => {
             name="esf"
             value={eyeData.esf}
             onChange={(e) => onFieldChange(`${eyeKey}.esf`, e.target.value)}
-            className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md shadow-sm text-black"
+            className="mt-1 block w-full pl-3 pr-10 py-3 text-base rounded-md shadow-sm text-black focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
           >
             {esfOptions.map(option => (
               <option key={`${eyeKey}-esf-${option.value}`} value={option.value}>{option.label}</option>
@@ -87,7 +87,7 @@ const EyeForm = ({ eyeLabel, eyeData, eyeKey, onFieldChange, colorClass }) => {
             name="cil"
             value={eyeData.cil}
             onChange={(e) => onFieldChange(`${eyeKey}.cil`, e.target.value)}
-            className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md shadow-sm text-black"
+            className="mt-1 block w-full pl-3 pr-10 py-3 text-base rounded-md shadow-sm text-black focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
           >
             {cilOptions.map(option => (
               <option key={`${eyeKey}-cil-${option.value}`} value={option.value}>{option.label}</option>
@@ -101,7 +101,7 @@ const EyeForm = ({ eyeLabel, eyeData, eyeKey, onFieldChange, colorClass }) => {
             name="eixo"
             value={eyeData.eixo}
             onChange={(e) => onFieldChange(`${eyeKey}.eixo`, e.target.value)}
-            className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md shadow-sm text-black"
+            className="mt-1 block w-full pl-3 pr-10 py-3 text-base rounded-md shadow-sm text-black focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
           >
             {eixoOptions.map(option => (
               <option key={`${eyeKey}-eixo-${option.value}`} value={option.value}>{option.label}</option>
