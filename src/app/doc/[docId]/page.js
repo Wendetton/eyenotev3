@@ -247,44 +247,50 @@ export default function DocumentPage() {
   }, [docId, userId, userName, userColor]);
 
 const updateDocInFirestore = async (updates) => {
-    if (!docId) return;
+  if (!docId) return;
 
-    // Direciona updates para o subdocumento do paciente quando apropriado
-    const keys = Object.keys(updates || {});
-    const touchesPatient = !!selectedPatient && keys.some((k) => (
-      k === 'rightEye' || k.startsWith('rightEye.') ||
-      k === 'leftEye'  || k.startsWith('leftEye.')  ||
-      k === 'addition' || k.startsWith('addition.') ||
-      k === 'annotations'
-    ));
+  // Detecta updates do paciente (inclui dot notation)
+  const keys = Object.keys(updates || {});
+  const touchesPatient = !!selectedPatient && keys.some((k) => (
+    k === 'rightEye' || k.startsWith('rightEye.') ||
+    k === 'leftEye'  || k.startsWith('leftEye.')  ||
+    k === 'addition' || k.startsWith('addition.') ||
+    k === 'annotations'
+  ));
 
-    if (touchesPatient) {
-      const patientDocRef = doc(db, 'documents', docId, 'patients', selectedPatient.id);
+  if (touchesPatient) {
+    const patientDocRef = doc(db, 'documents', docId, 'patients', selectedPatient.id);
+    try {
+      // Se o subdoc já existe, isso funciona e mantém dot notation
+      await updateDoc(patientDocRef, updates);
+    } catch (error) {
+      // Se NÃO existe, inicializa o subdoc (sem dot notation) e depois aplica o update com dot notation
       try {
-        await updateDoc(patientDocRef, updates);
-      } catch (error) {
-        // Se o documento do paciente não existir, cria com os campos enviados
-        try {
-          await setDoc(patientDocRef, {
+        await setDoc(
+          patientDocRef,
+          {
             patientId: selectedPatient.id,
-            patientName: selectedPatient.name,
+            patientName: selectedPatient.name || '',
             createdAt: serverTimestamp(),
-            ...updates
-          });
-        } catch (createError) {
-          console.error("Erro ao criar documento do paciente:", createError);
-        }
-      }
-    } else {
-      // Dados globais do documento (ex.: seleção de paciente, flags gerais)
-      const docRef = doc(db, 'documents', docId);
-      try {
-        await updateDoc(docRef, updates);
-      } catch (error) {
-        console.error("Erro ao atualizar documento:", error);
+          },
+          { merge: true } // importantíssimo: não sobrescrever nada existente
+        );
+        await updateDoc(patientDocRef, updates); // agora o doc existe e dot notation funciona
+      } catch (createError) {
+        console.error('Erro ao inicializar/atualizar subdocumento do paciente:', createError);
       }
     }
+  } else {
+    // Atualizações globais do documento (seleção de paciente, flags, etc.)
+    const docRef = doc(db, 'documents', docId);
+    try {
+      await updateDoc(docRef, updates);
+    } catch (error) {
+      console.error('Erro ao atualizar documento raiz:', error);
+    }
+  }
 };
+
 
 
   const updateField = (path, value) => {
