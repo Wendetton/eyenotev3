@@ -425,8 +425,13 @@ export default function DocumentPage() {
     attachPatientListenerById(patient?.id || null, patient?.name || 'Paciente Selecionado');
     if (patient?.id) {
       await updateDocInFirestore({
+        // novo esquema por perfil
+         [`selectedPatientId_${userProfile}`]: patient.id,
+        [`selectedPatientName_${userProfile}`]: patient.name || '',
+        // compat com o esquema antigo (caso algum cliente antigo ainda use)
         selectedPatientId: patient.id,
         selectedPatientName: patient.name || '',
+        // metadados
         selectedBy: userName,
         selectedByProfile: userProfile,
         selectedAt: serverTimestamp(),
@@ -438,11 +443,16 @@ export default function DocumentPage() {
     attachPatientListenerById(null);
     try {
       await updateDocInFirestore({
-        selectedPatientId: null,
-        selectedPatientName: null,
-        selectedBy: null,
-        selectedByProfile: null,
-        selectedAt: serverTimestamp(),
+         // limpar só a seleção DO PERFIL atual
+         [`selectedPatientId_${userProfile}`]: null,
+         [`selectedPatientName_${userProfile}`]: null,
+         // manter compat: também zera os antigos (evita “ficar preso”)
+         selectedPatientId: null,
+         selectedPatientName: null,
+         // metadados
+         selectedBy: null,
+         selectedByProfile: null,
+         selectedAt: serverTimestamp(),
       });
     } catch (e) {
       console.error('Erro ao limpar seleção:', e);
