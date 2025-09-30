@@ -246,16 +246,24 @@ export default function DocumentPage() {
     };
   }, [docId, userId, userName, userColor]);
 
-  const updateDocInFirestore = async (updates) => {
+const updateDocInFirestore = async (updates) => {
     if (!docId) return;
-    
-    // Se há paciente selecionado, salvar dados específicos do paciente
-    if (selectedPatient && (updates.rightEye || updates.leftEye || updates.addition || updates.annotations)) {
+
+    // Direciona updates para o subdocumento do paciente quando apropriado
+    const keys = Object.keys(updates || {});
+    const touchesPatient = !!selectedPatient && keys.some((k) => (
+      k === 'rightEye' || k.startsWith('rightEye.') ||
+      k === 'leftEye'  || k.startsWith('leftEye.')  ||
+      k === 'addition' || k.startsWith('addition.') ||
+      k === 'annotations'
+    ));
+
+    if (touchesPatient) {
       const patientDocRef = doc(db, 'documents', docId, 'patients', selectedPatient.id);
-      try { 
-        await updateDoc(patientDocRef, updates); 
-      } catch (error) { 
-        // Se documento do paciente não existe, criar
+      try {
+        await updateDoc(patientDocRef, updates);
+      } catch (error) {
+        // Se o documento do paciente não existir, cria com os campos enviados
         try {
           await setDoc(patientDocRef, {
             patientId: selectedPatient.id,
@@ -268,12 +276,16 @@ export default function DocumentPage() {
         }
       }
     } else {
-      // Para dados globais do documento (seleção de paciente, etc.)
+      // Dados globais do documento (ex.: seleção de paciente, flags gerais)
       const docRef = doc(db, 'documents', docId);
-      try { await updateDoc(docRef, updates); }
-      catch (error) { console.error("Erro ao atualizar documento:", error); }
+      try {
+        await updateDoc(docRef, updates);
+      } catch (error) {
+        console.error("Erro ao atualizar documento:", error);
+      }
     }
-  };
+};
+
 
   const updateField = (path, value) => {
     const keys = path.split('.');
