@@ -668,7 +668,7 @@ if (userProfile === 'assistant') {
           <div className="bg-white rounded-lg shadow-lg p-6 border-t-4 border-emerald-500">
             <h2 className="text-xl font-semibold mb-4 text-gray-700">Exames do Paciente</h2>
             {/* Reutilizando o mesmo componente de exames do médico */}
-            <ExamViewer patient={selectedPatient} />
+            <ExamViewer patient={selectedPatient} canEdit={true} />
             <p className="text-sm text-gray-500 mt-3">
               Dica: selecione uma nova imagem para substituição, se necessário. A atualização é em tempo real para todos.
             </p>
