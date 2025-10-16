@@ -797,15 +797,10 @@ export default function DocumentPage() {
           </div>
         </header>
 
-               {/* Barra de chamada na TV */}
-        <div className="mb-6">
-          <CallPatientBar
-            documentId={docId}
-            patient={selectedPatient}
-            userName={userName}
-          />
-        </div>
-                     
+     {/* Barra de chamada na TV */}
+<div className="mb-6">
+  <CallPatientBar patient={selectedPatient} />
+</div>                 
 
         <div className="flex flex-grow flex-col lg:flex-row gap-6">
           <main className="flex-grow lg:w-[62%]">
