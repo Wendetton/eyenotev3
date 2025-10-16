@@ -21,8 +21,10 @@ import ProfileSelector from '@/components/common/ProfileSelector';
 import PatientSelector from '@/components/doctor/PatientSelector';
 import PatientCreationForm from '@/components/assistant/PatientCreationForm';
 import ExamViewer from '@/components/doctor/ExamViewer';
+import CallPatientBar from '@/components/doctor/CallPatientBar';
 import PatientCard from '@/components/patient/PatientCard';
 import ArchivedPatients from '@/components/common/ArchivedPatients';
+
 
 import {
   subscribeToDocumentPatients,
@@ -794,6 +796,16 @@ export default function DocumentPage() {
             </div>
           </div>
         </header>
+
+               {/* Barra de chamada na TV */}
+        <div className="mb-6">
+          <CallPatientBar
+            documentId={docId}
+            patient={selectedPatient}
+            userName={userName}
+          />
+        </div>
+                     
 
         <div className="flex flex-grow flex-col lg:flex-row gap-6">
           <main className="flex-grow lg:w-[62%]">
