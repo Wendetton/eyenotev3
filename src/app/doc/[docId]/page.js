@@ -794,13 +794,11 @@ export default function DocumentPage() {
                 </p>
               </div>
             </div>
-          </div>
-        </header>
 
-     {/* Barra de chamada na TV */}
-<div className="mb-6">
-  <CallPatientBar patient={selectedPatient} />
-</div>                 
+          {/* lado direito do cabeçalho */}
+          <CallPatientBar patient={selectedPatient} compact />
+          </div>
+        </header>             
 
         <div className="flex flex-grow flex-col lg:flex-row gap-6">
           <main className="flex-grow lg:w-[62%]">
