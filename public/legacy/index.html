@@ -14,11 +14,12 @@
     label { display:block; font-size:13px; color:#374151; margin:8px 0 6px; }
     input[type="text"], select { width:100%; padding:9px; border:1px solid #d1d5db; border-radius:8px; font-size:14px; }
     input[type="file"] { width:100%; }
-    .row { display:flex; gap:10px; }
-    .col { flex:1; }
+    .row { display:flex; gap:10px; flex-wrap: wrap; }
+    .col { flex:1; min-width: 220px; }
     .btn { display:inline-block; background:#2563eb; color:#fff; border:none; padding:9px 13px; border-radius:8px; font-weight:600; font-size:14px; }
     .btn.gray { background:#6b7280; }
     .btn.red { background:#dc2626; }
+    .btn.ghost { background:transparent; color:#374151; border:1px solid #e5e7eb; }
     .btn:disabled { background:#9ca3af; }
     .muted { color:#6b7280; font-size:12px; margin-top:6px;}
     .ok { color:#16a34a; font-size:13px; margin-top:8px;}
@@ -29,13 +30,16 @@
     .doctor-item { display:flex; align-items:center; gap:6px; padding:6px 8px; border:1px solid #e5e7eb; border-radius:8px; background:#f9fafb; }
     .doctor-item .name { font-weight:600; }
     .doctor-item .docid { font-size:12px; color:#6b7280; }
-    .doctor-actions { display:flex; gap:6px; margin-top:8px; }
+    .doctor-item.selected { background:#e0f2fe; border-color:#93c5fd; } /* destaque do selecionado */
 
     .patients { max-height: 340px; overflow:auto; border:1px solid #e5e7eb; border-radius:10px; background:#fff; }
     .patient-row { display:flex; align-items:center; justify-content:space-between; padding:8px 10px; border-bottom:1px solid #f1f5f9; }
     .patient-row:last-child { border-bottom:none; }
     .p-title { font-size:14px; font-weight:600; }
     .p-sub { font-size:12px; color:#6b7280; }
+
+    /* deixa o docId mais estreito sem quebrar layout */
+    .narrow { max-width: 260px; }
   </style>
 
   <!-- Firebase v8 (compatível iOS 10) -->
@@ -53,13 +57,18 @@
 
         <!-- ====== Médicos (docIds) ====== -->
         <div class="card">
-          <h2>Médicos</h2>
+          <div class="row" style="align-items:flex-end; justify-content:space-between;">
+            <h2 style="margin:0;">Médicos</h2>
+            <!-- Botão discreto para remover o médico selecionado -->
+            <button class="btn ghost" id="btnRemoveSelected" title="Remover médico selecionado">Remover selecionado</button>
+          </div>
+
           <div class="row">
             <div class="col">
               <label>Nome do médico</label>
               <input type="text" id="doctorName" placeholder="Ex.: Dr. João">
             </div>
-            <div class="col">
+            <div class="col narrow">
               <label>ID do documento</label>
               <input type="text" id="doctorDocId" placeholder="Ex.: abc123">
             </div>
@@ -82,10 +91,6 @@
             <div class="col">
               <label>Paciente (nome)</label>
               <input type="text" id="patientName" placeholder="Ex.: Maria Silva">
-            </div>
-            <div class="col">
-              <label>Médico (selecionado acima)</label>
-              <input type="text" id="selectedDoctorBadge" disabled>
             </div>
           </div>
 
@@ -143,7 +148,7 @@
   var doctorDocIdInput = $('doctorDocId');
   var doctorListEl = $('doctorList');
   var noDoctorsNoteEl = $('noDoctorsNote');
-  var selectedDoctorBadge = $('selectedDoctorBadge');
+  var btnRemoveSelected = $('btnRemoveSelected');
 
   var patientNameInput = $('patientName');
   var arInput = $('arFile');
@@ -210,65 +215,12 @@
     } catch(e){ selectedDoctor = null; }
   }
 
-  function renderDoctors(){
-    doctorListEl.innerHTML = '';
-    if (!doctors.length){
-      show(noDoctorsNoteEl, true);
-      selectedDoctor = null;
-      selectedDoctorBadge.value = '';
-      saveSelectedDoctor();
-      renderPatients([]);
-      return;
-    }
-    show(noDoctorsNoteEl, false);
-    for (var i=0;i<doctors.length;i++){
-      (function(idx){
-        var d = doctors[idx];
-        var wrap = document.createElement('label');
-        wrap.className = 'doctor-item';
-        var radio = document.createElement('input');
-        radio.type = 'radio';
-        radio.name = 'doctorPick';
-        radio.checked = (selectedDoctor && selectedDoctor.docId === d.docId);
-        radio.onchange = function(){
-          selectedDoctor = { name: d.name, docId: d.docId };
-          selectedDoctorBadge.value = d.name + ' (' + d.docId + ')';
-          saveSelectedDoctor();
-          subscribePatientsForSelected(); // recarrega lista
-        };
-        var nm = document.createElement('span');
-        nm.className = 'name';
-        nm.textContent = d.name;
-        var dd = document.createElement('span');
-        dd.className = 'docid';
-        dd.textContent = d.docId;
-
-        wrap.appendChild(radio);
-        wrap.appendChild(nm);
-        wrap.appendChild(dd);
-        doctorListEl.appendChild(wrap);
-      })(i);
-    }
-    // manter seleção válida
-    if (!selectedDoctor && doctors.length){
-      selectedDoctor = { name: doctors[0].name, docId: doctors[0].docId };
-    }
-    if (selectedDoctor){
-      selectedDoctorBadge.value = selectedDoctor.name + ' (' + selectedDoctor.docId + ')';
-      saveSelectedDoctor();
-      subscribePatientsForSelected();
-    }
-  }
-
-  // ====== Pacientes (lista + arquivar) ======
-  var unsubscribePatients = null;
   function subscribePatientsForSelected(){
     if (unsubscribePatients){ try{ unsubscribePatients(); }catch(e){} unsubscribePatients = null; }
     if (!selectedDoctor || !selectedDoctor.docId){
       renderPatients([]);
       return;
     }
-    // Duplo filtro por igualdade não precisa de índice; ordenamos no client.
     var q = firebase.firestore()
       .collection('patients')
       .where('documentId','==', selectedDoctor.docId)
@@ -282,7 +234,6 @@
         data.id = d.id;
         arr.push(data);
       }
-      // ordena por createdAt desc na mão
       arr.sort(function(a,b){
         var ta = (a.createdAt && a.createdAt.toMillis) ? a.createdAt.toMillis() : 0;
         var tb = (b.createdAt && b.createdAt.toMillis) ? b.createdAt.toMillis() : 0;
@@ -344,6 +295,55 @@
     }
   }
 
+  function renderDoctors(){
+    doctorListEl.innerHTML = '';
+    if (!doctors.length){
+      show(noDoctorsNoteEl, true);
+      selectedDoctor = null;
+      saveSelectedDoctor();
+      renderPatients([]);
+      return;
+    }
+    show(noDoctorsNoteEl, false);
+    for (var i=0;i<doctors.length;i++){
+      (function(idx){
+        var d = doctors[idx];
+        var wrap = document.createElement('label');
+        wrap.className = 'doctor-item';
+        var isSelected = (selectedDoctor && selectedDoctor.docId === d.docId);
+        if (isSelected){ wrap.className += ' selected'; } // destaque visual
+
+        var radio = document.createElement('input');
+        radio.type = 'radio';
+        radio.name = 'doctorPick';
+        radio.checked = isSelected;
+        radio.onchange = function(){
+          selectedDoctor = { name: d.name, docId: d.docId };
+          saveSelectedDoctor();
+          renderDoctors();         // re-render para aplicar destaque
+          subscribePatientsForSelected();
+        };
+
+        var nm = document.createElement('span');
+        nm.className = 'name';
+        nm.textContent = d.name;
+        var dd = document.createElement('span');
+        dd.className = 'docid';
+        dd.textContent = d.docId;
+
+        wrap.appendChild(radio);
+        wrap.appendChild(nm);
+        wrap.appendChild(dd);
+        doctorListEl.appendChild(wrap);
+      })(i);
+    }
+    if (!selectedDoctor && doctors.length){
+      selectedDoctor = { name: doctors[0].name, docId: doctors[0].docId };
+      saveSelectedDoctor();
+    }
+    subscribePatientsForSelected();
+  }
+
   // ===== Upload de arquivos =====
   function uploadIfAny(file, patientId, kind, cb){
     if (!file){ cb(null, null); return; }
@@ -369,11 +369,13 @@
   }
 
   // ===== Fluxo principal =====
+  var unsubscribePatients = null;
+
   $('btnAddDoctor').onclick = function(){
     var nm = clean(doctorNameInput.value);
     var id = clean(doctorDocIdInput.value);
     if (!nm || !id){ return; }
-    // evita duplicados por docId
+
     var exists = false;
     for (var i=0;i<doctors.length;i++){ if (doctors[i].docId === id){ exists = true; break; } }
     if (!exists){
@@ -383,6 +385,21 @@
     }
     doctorNameInput.value = '';
     doctorDocIdInput.value = '';
+  };
+
+  // Remover médico selecionado (botão discreto no topo)
+  btnRemoveSelected.onclick = function(){
+    if (!selectedDoctor || !selectedDoctor.docId) return;
+    var target = selectedDoctor.docId;
+    var next = [];
+    for (var i=0;i<doctors.length;i++){
+      if (doctors[i].docId !== target){ next.push(doctors[i]); }
+    }
+    doctors = next;
+    selectedDoctor = null;
+    saveDoctors();
+    saveSelectedDoctor();
+    renderDoctors();
   };
 
   btnCreate.onclick = function(){
