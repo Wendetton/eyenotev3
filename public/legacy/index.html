@@ -48,7 +48,7 @@
     .broadcast {
       display: none;
       color: #fff;
-      background: #ef4444; /* vermelho */
+      background: #ef4444;
       padding: 10px 12px;
       font-weight: 800;
       text-transform: uppercase;
@@ -56,7 +56,7 @@
       text-align: left;
       border: 2px solid #b91c1c;
       border-radius: 8px;
-      margin: 10px 0 12px 0; /* entre título e box Médicos */
+      margin: 10px 0 12px 0;
     }
     .broadcast.pulse { animation: pulseFlash 2.5s linear infinite; } /* mais suave */
     @keyframes pulseFlash { 0%,100%{filter:brightness(1);} 50%{filter:brightness(1.25);} }
@@ -64,24 +64,19 @@
     .broadcast .msg { display:block; margin-top:6px; }
     .broadcast .mini { background:#fff; color:#b91c1c; border:1px solid #fecaca; font-weight:700; padding:6px 8px; border-radius:8px; }
 
-    /* ====== LISTA DE AVISOS (múltiplos) — ESCOPADA ====== */
-    .legacy-alerts { margin: 12px 0; }
-    .legacy-alerts.hidden { display: none; }
-    .legacy-alerts-item {
+    /* ===== Lista de avisos empilhados ===== */
+    .alerts { margin: 10px 0 12px; }
+    .alerts.hidden { display: none; }
+    .alert-item {
       background: #fee2e2;
       border: 1px solid #fecaca;
       border-radius: 8px;
       padding: 10px 12px;
       margin-bottom: 8px;
-      /* Sem animação aqui para evitar “piscadas” excessivas */
     }
-    .legacy-alerts-title { font-weight:700; margin-bottom:4px; }
-    .legacy-alerts-line { font-size:14px; }
-    .legacy-alerts-line b { font-weight:700; }
-    .legacy-alerts-actions { margin-top:6px; }
-    .legacy-alerts-btn {
-      background:#ef4444; color:#fff; border:none; border-radius:6px; padding:6px 10px; font-size:12px; cursor:pointer;
-    }
+    .alert-title { font-weight:700; margin-bottom:4px; }
+    .alert-line { font-size:14px; }
+    .alert-line b { font-weight:700; }
   </style>
 
   <!-- Firebase v8 -->
@@ -95,10 +90,7 @@
     <div class="card">
       <h1>EyeNote – Uploader Legacy</h1>
 
-      <!-- Lista de avisos (múltiplos) -->
-      <div id="legacy-alerts-root" class="legacy-alerts hidden"></div>
-
-      <!-- Barra de transmissão abaixo do título -->
+      <!-- Barra de transmissão (agregada) -->
       <div id="broadcastBar" class="broadcast">
         <div class="topline">
           <div id="broadcastMeta">—</div>
@@ -106,6 +98,9 @@
         </div>
         <div id="broadcastMsg" class="msg"></div>
       </div>
+
+      <!-- NOVO: lista de avisos empilhados -->
+      <div id="alertsRoot" class="alerts hidden"></div>
 
       <div id="status" class="muted">Carregando...</div>
       <div id="app" style="display:none">
@@ -190,6 +185,7 @@
 
 <script>
 (function(){
+  // ===== Helpers =====
   function $(id){ return document.getElementById(id); }
   function clean(s){ return String(s || '').replace(/\s+/g,' ').trim(); }
   function show(el, on){ el.style.display = on ? 'block' : 'none'; }
@@ -218,13 +214,16 @@
 
   var patientsBox = $('patientsBox');
 
+  // Broadcast (agregada)
   var broadcastBar = $('broadcastBar');
   var broadcastMsg = $('broadcastMsg');
   var broadcastMeta = $('broadcastMeta');
   var btnBroadcastOff = $('btnBroadcastOff');
 
-  var legacyAlertsRoot = $('legacy-alerts-root');
+  // Avisos empilhados
+  var alertsRoot = $('alertsRoot');
 
+  // Som
   var soundBtn = $('soundBtn');
   var audioCtx = null;
   var soundEnabled = false;
@@ -232,19 +231,21 @@
   var LS_DOCTORS = 'legacy_doctors_v1';
   var LS_SELECTED = 'legacy_selected_doctor_v1';
 
-  var doctors = [];
-  var selectedDoctor = null;
+  var doctors = [];           // [{name, docId}]
+  var selectedDoctor = null;  // {name, docId}
   var unsubscribePatients = null;
   var unsubscribeBroadcast = null;
-  var legacyAlertsUnsub = null;
+  var unsubscribeAlerts = null;
   var alertTimer = null;
 
+  // Toggle cadastro recolhível
   btnToggleAdd.onclick = function(){
     var open = addDoctorBox.style.display === 'block';
     addDoctorBox.style.display = open ? 'none' : 'block';
     btnToggleAdd.setAttribute('aria-expanded', open ? 'false' : 'true');
   };
 
+  // ===== Som (iOS 10 exige gesto) =====
   soundBtn.onclick = function(){
     try {
       if (!audioCtx){
@@ -267,7 +268,7 @@
       var osc = audioCtx.createOscillator();
       var gain = audioCtx.createGain();
       osc.type = 'sine';
-      osc.frequency.value = 880;
+      osc.frequency.value = 880;      // A5
       gain.gain.setValueAtTime(0.001, audioCtx.currentTime);
       gain.gain.exponentialRampToValueAtTime(0.6, audioCtx.currentTime + 0.01);
       gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
@@ -278,6 +279,7 @@
     } catch(e){}
   }
 
+  // ===== Firebase boot =====
   function loadJSON(url, cb){
     var xhr = new XMLHttpRequest();
     xhr.open('GET', url, true);
@@ -301,6 +303,7 @@
   function saveSelectedDoctor(){ try { localStorage.setItem(LS_SELECTED, JSON.stringify(selectedDoctor || null)); } catch(e){} }
   function loadSelectedDoctor(){ try { var s = localStorage.getItem(LS_SELECTED); if (s) selectedDoctor = JSON.parse(s) || null; } catch(e){ selectedDoctor = null; } }
 
+  // ===== Broadcast agregada =====
   btnBroadcastOff.onclick = function(){
     if (!selectedDoctor || !selectedDoctor.docId) return;
     firebase.firestore().collection('broadcasts').doc(selectedDoctor.docId).set(
@@ -346,93 +349,71 @@
     }, function(err){ console.log('Broadcast error', err); });
   }
 
-  /* ====== AVISOS MÚLTIPLOS (subcoleção) ====== */
-
-  function resetLegacyAlertsUI(){
-    if (!legacyAlertsRoot) return;
-    legacyAlertsRoot.innerHTML = '';
-    legacyAlertsRoot.className = 'legacy-alerts hidden';
+  // ===== Avisos empilhados (subcoleção) =====
+  function clearAlertsUI(){
+    alertsRoot.innerHTML = '';
+    alertsRoot.className = 'alerts hidden';
   }
 
-  function renderLegacyAlerts(snapshot){
-    if (!legacyAlertsRoot) return;
-    legacyAlertsRoot.innerHTML = '';
+  function renderAlerts(snap){
+    alertsRoot.innerHTML = '';
 
-    // Coleta e filtra no cliente + DEDUPE por (docId + paciente + msg + médico)
+    // Dedupe por (medico + paciente + mensagem)
     var seen = {};
     var items = [];
-    snapshot.forEach(function(docSnap){
-      var data = docSnap.data() || {};
-      if (!data || !data.active) return;
 
-      var medico = data.emittedByName || 'Médico';
-      var paciente = data.patientName || data.patient || data.name || 'Paciente';
-      var msg = (data.message || '').toUpperCase();
+    for (var i=0;i<snap.docs.length;i++){
+      var d = snap.docs[i].data() || {};
+      if (!d.active) continue;
 
-      var key = (selectedDoctor ? selectedDoctor.docId : '—') + '|' + medico + '|' + paciente + '|' + msg;
-      if (seen[key]) return;
+      var medico   = d.emittedByName || 'Médico';
+      var paciente = d.patientName || d.patient || d.name || 'Paciente';
+      var msg      = String(d.message || '').toUpperCase();
+
+      var key = medico + '|' + paciente + '|' + msg;
+      if (seen[key]) continue;
       seen[key] = true;
 
-      items.push({ id: docSnap.id, data: data, ref: docSnap.ref });
-    });
+      items.push({ medico: medico, paciente: paciente, msg: msg });
+    }
 
     if (!items.length){
-      legacyAlertsRoot.className = 'legacy-alerts hidden';
+      alertsRoot.className = 'alerts hidden';
       return;
     }
 
-    legacyAlertsRoot.className = 'legacy-alerts';
+    alertsRoot.className = 'alerts';
+    for (var j=0;j<items.length;j++){
+      var it = items[j];
 
-    for (var i=0;i<items.length;i++){
-      (function(idx){
-        var d = items[idx].data;
-        var ref = items[idx].ref;
+      var box = document.createElement('div');
+      box.className = 'alert-item';
 
-        var medico = d.emittedByName || 'Médico';
-        var paciente = d.patientName || d.patient || d.name || 'Paciente';
-        var msg = (d.message || '').toUpperCase();
+      var t = document.createElement('div');
+      t.className = 'alert-title';
+      t.textContent = '<' + it.medico + ':>';
 
-        var title = document.createElement('div');
-        title.className = 'legacy-alerts-title';
-        title.appendChild(document.createTextNode('<' + medico + ':>'));
+      var line = document.createElement('div');
+      line.className = 'alert-line';
 
-        var line = document.createElement('div');
-        line.className = 'legacy-alerts-line';
+      var bPac = document.createElement('b');
+      bPac.textContent = 'Paciente ' + it.paciente;
+      line.appendChild(bPac);
+      line.appendChild(document.createTextNode(': '));
 
-        var bPatient = document.createElement('b');
-        bPatient.appendChild(document.createTextNode('Paciente ' + paciente));
-        line.appendChild(bPatient);
-        line.appendChild(document.createTextNode(': '));
+      var bMsg = document.createElement('b');
+      bMsg.textContent = it.msg;
+      line.appendChild(bMsg);
 
-        var bMsg = document.createElement('b');
-        bMsg.appendChild(document.createTextNode(msg));
-        line.appendChild(bMsg);
-
-        var actions = document.createElement('div');
-        actions.className = 'legacy-alerts-actions';
-        var btn = document.createElement('button');
-        btn.className = 'legacy-alerts-btn';
-        btn.appendChild(document.createTextNode('Desativar'));
-        btn.onclick = function(){
-          ref.set({ active:false, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge:true });
-        };
-        actions.appendChild(btn);
-
-        var item = document.createElement('div');
-        item.className = 'legacy-alerts-item';
-        item.appendChild(title);
-        item.appendChild(line);
-        item.appendChild(actions);
-
-        legacyAlertsRoot.appendChild(item);
-      })(i);
+      box.appendChild(t);
+      box.appendChild(line);
+      alertsRoot.appendChild(box);
     }
   }
 
-  var legacyAlertsUnsub = null;
-  function subscribeLegacyAlerts(){
-    if (legacyAlertsUnsub){ try{ legacyAlertsUnsub(); }catch(e){} legacyAlertsUnsub = null; }
-    resetLegacyAlertsUI();
+  function subscribeAlerts(){
+    if (unsubscribeAlerts){ try{ unsubscribeAlerts(); }catch(e){} unsubscribeAlerts = null; }
+    clearAlertsUI();
     if (!selectedDoctor || !selectedDoctor.docId) return;
 
     var ref = firebase.firestore()
@@ -441,20 +422,15 @@
       .orderBy('createdAt','desc')
       .limit(30);
 
-    legacyAlertsUnsub = ref.onSnapshot(function(snap){
-      renderLegacyAlerts(snap);
+    unsubscribeAlerts = ref.onSnapshot(function(snap){
+      renderAlerts(snap);
     }, function(err){
-      console.log('Alerts listener error:', err);
+      console.log('Alerts error', err);
+      clearAlertsUI();
     });
   }
 
-  function unsubscribeLegacyAlerts(){
-    if (legacyAlertsUnsub){ try{ legacyAlertsUnsub(); }catch(e){} legacyAlertsUnsub = null; }
-    resetLegacyAlertsUI();
-  }
-
-  /* ====== Pacientes ====== */
-
+  // ===== Pacientes =====
   function subscribePatientsForSelected(){
     if (unsubscribePatients){ try{ unsubscribePatients(); }catch(e){} unsubscribePatients = null; }
     if (!selectedDoctor || !selectedDoctor.docId){
@@ -543,7 +519,8 @@
       saveSelectedDoctor();
       renderPatients([]);
       subscribeBroadcast();
-      unsubscribeLegacyAlerts();
+      if (unsubscribeAlerts){ try{ unsubscribeAlerts(); }catch(e){} unsubscribeAlerts=null; }
+      clearAlertsUI();
       return;
     }
     show(noDoctorsNoteEl, false);
@@ -565,7 +542,7 @@
           renderDoctors();
           subscribePatientsForSelected();
           subscribeBroadcast();
-          subscribeLegacyAlerts();
+          subscribeAlerts(); // assina lista de avisos
         };
 
         var nm = document.createElement('span');
@@ -587,9 +564,10 @@
     }
     subscribePatientsForSelected();
     subscribeBroadcast();
-    subscribeLegacyAlerts();
+    subscribeAlerts();
   }
 
+  // Upload se houver arquivo
   function uploadIfAny(file, patientId, kind, cb){
     if (!file){ cb(null, null); return; }
     try {
@@ -613,6 +591,7 @@
     }
   }
 
+  // Ações
   $('btnAddDoctor').onclick = function(){
     var nm = clean(doctorNameInput ? doctorNameInput.value : '');
     var id = clean(doctorDocIdInput ? doctorDocIdInput.value : '');
@@ -626,7 +605,7 @@
       renderDoctors();
     }
     if (doctorNameInput) doctorNameInput.value = '';
-    if (doctorDocIdInput) doctorDocIdInput.value = '';
+       if (doctorDocIdInput) doctorDocIdInput.value = '';
   };
 
   btnRemoveSelected.onclick = function(){
@@ -681,6 +660,7 @@
 
   btnReset.onclick = function(){ patientNameInput.value=''; arInput.value=''; tonoInput.value=''; show(okEl,false); show(errEl,false); };
 
+  // Boot
   loadJSON('/firebase-config.json', function(err, cfg){
     if (err){ statusEl.textContent = 'Erro ao carregar firebase-config.json'; return; }
     try { firebase.initializeApp(cfg); } catch(e){ statusEl.textContent = 'Falha ao inicializar Firebase.'; return; }
@@ -690,6 +670,7 @@
         statusEl.style.display='none'; appEl.style.display='block';
         addDoctorBox.style.display='none'; btnToggleAdd.setAttribute('aria-expanded','false');
 
+        // Som começa desativado; toque “Ativar som” 1x
         soundBtn.className = 'pill'; soundBtn.textContent = '🔊 Ativar som';
 
         loadDoctors(); loadSelectedDoctor(); renderDoctors();
