@@ -861,36 +861,35 @@ export default function DocumentPage() {
               </div>
             </div>
 
-              {/* lado direito do cabeçalho: Chamador + Avisos (alinhados) */}
+              {/* lado direito do cabeçalho: Chamador + Avisos (alinhados por py-2) */}
               <div className="flex items-center gap-2">
-                {/* envolve o chamador numa “faixa” de 40px de altura */}
-                <div className="flex items-center h-10">
-                  <CallPatientBar patient={selectedPatient} compact />
-                </div>
+                <CallPatientBar patient={selectedPatient} compact />
               
-                {/* botão Aviso com 40px de altura */}
+                {/* botão Aviso com mesma altura do "Chamar" (py-2) */}
                 <button
                   type="button"
                   onClick={() => setShowAlertModal(true)}
                   title="Emitir aviso para o Legacy"
-                  className="inline-flex h-10 items-center px-3 rounded-md bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold"
+                  className="inline-flex items-center px-3 py-2 rounded-md bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold"
                 >
                   Aviso
                 </button>
               
-                {/* badge + link com a MESMA altura (40px) */}
                 {broadcastActive && (
                   <>
+                    {/* badge com padding vertical = py-2 */}
                     <span
-                      className="inline-flex h-10 items-center px-3 rounded-full text-xs font-semibold bg-red-100 text-red-800 leading-none"
+                      className="inline-flex items-center px-3 py-2 rounded-full text-xs font-semibold bg-red-100 text-red-800 leading-none"
                     >
                       Aviso ativo
                     </span>
+              
+                    {/* link "Finalizar" também com py-2 para nivelar */}
                     <button
                       type="button"
                       onClick={handleFinishAlert}
                       title="Finalizar aviso"
-                      className="inline-flex h-10 items-center text-red-700 hover:text-red-900 text-sm underline"
+                      className="inline-flex items-center py-2 text-red-700 hover:text-red-900 text-sm underline"
                     >
                       Finalizar
                     </button>
