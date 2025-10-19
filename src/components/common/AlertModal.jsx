@@ -2,12 +2,7 @@
 
 import { useEffect, useState } from 'react';
 
-export default function AlertModal({
-  isOpen,
-  onClose,
-  defaultPatientName = '',
-  onSend, // (payload) => void
-}) {
+export default function AlertModal({ isOpen, onClose, defaultPatientName = '', onSend }) {
   const [patientName, setPatientName] = useState(defaultPatientName || '');
   const [message, setMessage] = useState('');
 
@@ -20,84 +15,62 @@ export default function AlertModal({
 
   if (!isOpen) return null;
 
-  const presets = [
-    { label: 'Col', text: 'Comparecer ao consultório para Colírio' },
-    { label: 'Ot',  text: 'Comparecer ao consultório para Otoscopia' },
-    { label: 'Aval',text: 'Comparecer ao consultório para Avaliação' },
-  ];
-
-  const handlePreset = (t) => {
-    // se vazio, substitui. Se já tem texto, adiciona com separador.
-    setMessage((prev) => prev ? (prev + ' | ' + t) : t);
+  const pushCode = (code) => {
+    const next = (message ? message + ' | ' : '') + code;
+    setMessage(next);
   };
 
-  const handleSend = () => {
-    const name = (patientName || '').trim();
-    const msg  = (message || '').trim();
-    onSend({ patientName: name, message: msg });
-    onClose();
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!onSend) return;
+    onSend({
+      patientName: (patientName || '').trim(),
+      message: (message || '').toUpperCase().replace(/\s+/g, ' ').trim() // "COL | AVAL | OT"
+    });
   };
 
   return (
-    <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/40">
-      <div className="bg-white w-full max-w-md rounded-lg shadow-xl">
-        <div className="px-5 py-4 border-b">
-          <h3 className="text-lg font-semibold text-gray-800">Emitir aviso para o Legacy</h3>
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
+        <div className="px-4 py-3 border-b">
+          <h3 className="text-lg font-semibold">Emitir aviso (Legacy)</h3>
         </div>
 
-        <div className="px-5 py-4 space-y-4">
+        <form onSubmit={handleSubmit} className="p-4 space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Nome do paciente</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Paciente</label>
             <input
               type="text"
               value={patientName}
               onChange={(e) => setPatientName(e.target.value)}
               className="w-full border rounded-md px-3 py-2 text-black"
-              placeholder="Ex.: Maria Silva"
+              placeholder="Nome do paciente"
+              required
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Mensagem do alerta</label>
-            <textarea
+            <label className="block text-sm font-medium text-gray-700 mb-1">Mensagem (códigos curtos)</label>
+            <input
+              type="text"
               value={message}
               onChange={(e) => setMessage(e.target.value)}
-              className="w-full border rounded-md px-3 py-2 text-black resize-none"
-              rows={3}
-              placeholder="Digite a mensagem (ou use um dos atalhos abaixo)"
+              className="w-full border rounded-md px-3 py-2 text-black"
+              placeholder="Ex.: COL | AVAL | OT"
             />
-            <div className="mt-2 flex flex-wrap gap-2">
-              {presets.map((p) => (
-                <button
-                  key={p.label}
-                  type="button"
-                  onClick={() => handlePreset(p.text)}
-                  className="px-3 py-1.5 rounded-md text-sm font-semibold bg-orange-100 text-orange-800 hover:bg-orange-200"
-                  title={p.text}
-                >
-                  {p.label}
-                </button>
-              ))}
+            <div className="flex gap-2 mt-2">
+              <button type="button" onClick={() => pushCode('COL')} className="px-2 py-1 bg-gray-100 rounded">COL</button>
+              <button type="button" onClick={() => pushCode('AVAL')} className="px-2 py-1 bg-gray-100 rounded">AVAL</button>
+              <button type="button" onClick={() => pushCode('OT')} className="px-2 py-1 bg-gray-100 rounded">OT</button>
             </div>
+            <p className="text-xs text-gray-500 mt-1">Use apenas códigos (COL | AVAL | OT). Eles serão exibidos exatamente assim no Legacy.</p>
           </div>
-        </div>
 
-        <div className="px-5 py-4 border-t flex items-center justify-end gap-3">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-2 rounded-md bg-gray-100 hover:bg-gray-200 text-gray-800 font-medium"
-          >
-            Cancelar
-          </button>
-          <button
-            type="button"
-            onClick={handleSend}
-            className="px-4 py-2 rounded-md bg-orange-500 hover:bg-orange-600 text-white font-semibold"
-          >
-            Enviar
-          </button>
-        </div>
+          <div className="flex justify-end gap-2">
+            <button type="button" onClick={onClose} className="px-3 py-2 rounded-md border">Cancelar</button>
+            <button type="submit" className="px-3 py-2 rounded-md bg-orange-500 hover:bg-orange-600 text-white font-semibold">Enviar</button>
+          </div>
+        </form>
       </div>
     </div>
   );
