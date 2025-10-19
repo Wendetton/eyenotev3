@@ -371,54 +371,67 @@
     if (!legacyAlertsRoot) return;
     legacyAlertsRoot.innerHTML = '';
 
-    if (snapshot.empty){
+    // Coleta documentos e filtra no cliente (evita índice composto).
+    var items = [];
+    snapshot.forEach(function(docSnap){
+      var data = docSnap.data() || {};
+      if (data && data.active) {
+        items.push({ id: docSnap.id, data: data, ref: docSnap.ref });
+      }
+    });
+
+    if (!items.length){
       legacyAlertsRoot.className = 'legacy-alerts hidden';
       return;
     }
+
     legacyAlertsRoot.className = 'legacy-alerts';
 
-    snapshot.forEach(function(docSnap){
-      var data = docSnap.data() || {};
-      if (!data.active) return;
+    for (var i=0;i<items.length;i++){
+      (function(idx){
+        var d = items[idx].data;
+        var ref = items[idx].ref;
 
-      var medico = data.emittedByName || 'Médico';
-      var paciente = data.patientName || 'Paciente';
-      var msg = (data.message || '').toUpperCase(); // "COL | AVAL | OT"
+        var medico = d.emittedByName || 'Médico';
+        // Fallbacks para nome do paciente
+        var paciente = d.patientName || d.patient || d.name || 'Paciente';
+        var msg = (d.message || '').toUpperCase(); // "COL | AVAL | OT"
 
-      var title = document.createElement('div');
-      title.className = 'legacy-alerts-title';
-      title.appendChild(document.createTextNode('<' + medico + ':>'));
+        var title = document.createElement('div');
+        title.className = 'legacy-alerts-title';
+        title.appendChild(document.createTextNode('<' + medico + ':>'));
 
-      var line = document.createElement('div');
-      line.className = 'legacy-alerts-line';
+        var line = document.createElement('div');
+        line.className = 'legacy-alerts-line';
 
-      var bPatient = document.createElement('b');
-      bPatient.appendChild(document.createTextNode('Paciente ' + paciente));
-      line.appendChild(bPatient);
-      line.appendChild(document.createTextNode(': '));
+        var bPatient = document.createElement('b');
+        bPatient.appendChild(document.createTextNode('Paciente ' + paciente));
+        line.appendChild(bPatient);
+        line.appendChild(document.createTextNode(': '));
 
-      var bMsg = document.createElement('b');
-      bMsg.appendChild(document.createTextNode(msg));
-      line.appendChild(bMsg);
+        var bMsg = document.createElement('b');
+        bMsg.appendChild(document.createTextNode(msg));
+        line.appendChild(bMsg);
 
-      var actions = document.createElement('div');
-      actions.className = 'legacy-alerts-actions';
-      var btn = document.createElement('button');
-      btn.className = 'legacy-alerts-btn';
-      btn.appendChild(document.createTextNode('Desativar'));
-      btn.onclick = function(){
-        docSnap.ref.set({ active:false, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge:true });
-      };
-      actions.appendChild(btn);
+        var actions = document.createElement('div');
+        actions.className = 'legacy-alerts-actions';
+        var btn = document.createElement('button');
+        btn.className = 'legacy-alerts-btn';
+        btn.appendChild(document.createTextNode('Desativar'));
+        btn.onclick = function(){
+          ref.set({ active:false, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge:true });
+        };
+        actions.appendChild(btn);
 
-      var item = document.createElement('div');
-      item.className = 'legacy-alerts-item';
-      item.appendChild(title);
-      item.appendChild(line);
-      item.appendChild(actions);
+        var item = document.createElement('div');
+        item.className = 'legacy-alerts-item';
+        item.appendChild(title);
+        item.appendChild(line);
+        item.appendChild(actions);
 
-      legacyAlertsRoot.appendChild(item);
-    });
+        legacyAlertsRoot.appendChild(item);
+      })(i);
+    }
   }
 
   function subscribeLegacyAlerts(){
@@ -426,11 +439,12 @@
     resetLegacyAlertsUI();
     if (!selectedDoctor || !selectedDoctor.docId) return;
 
+    // Sem where; apenas orderBy + limit — evita índice composto.
     var ref = firebase.firestore()
       .collection('broadcasts').doc(selectedDoctor.docId)
       .collection('alerts')
-      .where('active','==',true)
-      .orderBy('createdAt','desc');
+      .orderBy('createdAt','desc')
+      .limit(30);
 
     legacyAlertsUnsub = ref.onSnapshot(function(snap){
       renderLegacyAlerts(snap);
