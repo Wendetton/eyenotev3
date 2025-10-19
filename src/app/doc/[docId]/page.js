@@ -9,7 +9,6 @@ import {
   updateDoc,
   getDoc,
   collection,
-  addDoc,
   deleteDoc,
   serverTimestamp,
   query,
@@ -144,7 +143,7 @@ export default function DocumentPage() {
   const [showAlertModal, setShowAlertModal] = useState(false);
   const [broadcastActive, setBroadcastActive] = useState(false);
   const [broadcastPatientId, setBroadcastPatientId] = useState(null);
-  const [broadcastPatientName, setBroadcastPatientName] = useState('');
+  const [broadcastPatientName, setBroadcastPatientName] = useState(''); // <- para a lista do médico
   const [broadcastMessage, setBroadcastMessage] = useState('');
 
   /* --------- Lista de pacientes (tempo real) --------- */
@@ -291,7 +290,7 @@ export default function DocumentPage() {
       const active = !!(data && data.active);
       setBroadcastActive(active);
       setBroadcastPatientId(data?.patientId || null);
-      setBroadcastPatientName(data?.patientName || '');
+      setBroadcastPatientName(data?.patientName || ''); // <- nome p/ lista do médico
       setBroadcastMessage(data?.message || '');
     }, (err) => {
       console.error('Erro no listener de broadcast:', err);
@@ -533,53 +532,30 @@ export default function DocumentPage() {
     }
   };
 
-  /* --------- AVISOS (Legacy) --------- */
-  // Aceita parâmetros vindos do Modal ou usa estados locais de fallback
-  const handleSendAlert = async (nameArg, messageArg) => {
-    if (!selectedPatient) {
-      alert('Selecione um paciente antes de emitir aviso.');
-      return;
-    }
-
-    const msg = (messageArg || broadcastMessage || '').trim().toUpperCase();
-    const patientName = (nameArg || broadcastPatientName || selectedPatient.name || '').trim();
-
-    if (!msg) {
-      alert('Escolha uma mensagem (COL / AVAL / OT).');
-      return;
-    }
-
+  /* --------- Avisos: enviar / finalizar --------- */
+  const handleSendAlert = async ({ patientName, message }) => {
     try {
-      // 1) Atualiza a barra (doc raiz) com TODOS os campos necessários
+      if (!docId) return;
+      if (!selectedPatient) {
+        alert('Nenhum paciente selecionado.');
+        return;
+      }
+      const color = '#ef4444'; // vermelho
       await setDoc(
         doc(db, 'broadcasts', docId),
         {
           active: true,
-          message: msg,
-          patientName,
-          emittedByDocId: docId,
+          message: (message || '').trim(),
+          color,
           emittedByName: userName || 'Médico',
+          emittedByDocId: docId,
           patientId: selectedPatient.id,
-          updatedAt: serverTimestamp()
+          patientName: (patientName || selectedPatient.name || '').trim(),
+          updatedAt: serverTimestamp(),
+          startedAt: serverTimestamp()
         },
         { merge: true }
       );
-
-      // 2) Adiciona um item na subcoleção (suporte a múltiplos avisos)
-      await addDoc(collection(db, 'broadcasts', docId, 'alerts'), {
-        active: true,
-        message: msg,
-        patientName,
-        emittedByDocId: docId,
-        emittedByName: userName || 'Médico',
-        patientId: selectedPatient.id,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
-      });
-
-      setShowAlertModal(false);
-      setBroadcastMessage('');
-      setBroadcastPatientName('');
     } catch (e) {
       console.error('Erro ao enviar aviso:', e);
       alert('Falha ao enviar aviso.');
@@ -588,26 +564,12 @@ export default function DocumentPage() {
 
   const handleFinishAlert = async () => {
     try {
-      // Desliga a barra agregada
+      if (!docId) return;
       await setDoc(
         doc(db, 'broadcasts', docId),
-        { active: false, updatedAt: serverTimestamp() },
+        { active: false, updatedAt: serverTimestamp(), endedAt: serverTimestamp() },
         { merge: true }
       );
-
-      // Desativa todos os avisos ativos deste paciente na subcoleção
-      const alertsCol = collection(db, 'broadcasts', docId, 'alerts');
-      const q = query(
-        alertsCol,
-        where('active', '==', true),
-        where('patientId', '==', selectedPatient?.id || '')
-      );
-      const snap = await getDocs(q);
-      await Promise.all(
-        snap.docs.map(d => updateDoc(d.ref, { active: false, updatedAt: serverTimestamp() }))
-      );
-
-      setShowAlertModal(false);
     } catch (e) {
       console.error('Erro ao finalizar aviso:', e);
       alert('Falha ao finalizar aviso.');
@@ -1073,7 +1035,7 @@ export default function DocumentPage() {
           isOpen={showAlertModal}
           onClose={() => setShowAlertModal(false)}
           defaultPatientName={selectedPatient?.name || ''}
-          onSend={({ patientName, message } = {}) => handleSendAlert(patientName, message)}
+          onSend={handleSendAlert}
         />
       </div>
     );
