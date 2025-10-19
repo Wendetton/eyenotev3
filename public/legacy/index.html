@@ -12,15 +12,19 @@
     h1 { font-size: 20px; margin: 0 0 8px; }
     h2 { font-size: 16px; margin: 0 0 10px; }
     label { display:block; font-size:13px; color:#374151; margin:8px 0 6px; }
-    input[type="text"], select { width:100%; padding:9px; border:1px solid #d1d5db; border-radius:8px; font-size:14px; }
+    input[type="text"], select { width:100%; padding:9px; border:1px solid #d1d5db; border-radius:8px; font-size:14px; box-sizing: border-box; }
     input[type="file"] { width:100%; }
-    .row { display:flex; gap:10px; flex-wrap: wrap; }
-    .col { flex:1; min-width: 220px; }
-    .btn { display:inline-block; background:#2563eb; color:#fff; border:none; padding:9px 13px; border-radius:8px; font-weight:600; font-size:14px; }
+    .row { display:flex; flex-wrap:wrap; gap:10px; }
+    /* col padrão: cresce, encolhe e quebra em ~260px */
+    .col { flex: 1 1 260px; min-width: 200px; }
+    /* docId mais estreito e fixo para não empurrar nada */
+    .col-narrow { flex: 0 0 240px; min-width: 220px; }
+    .col-auto { flex: 0 0 auto; }
+    .btn { display:inline-block; background:#2563eb; color:#fff; border:none; padding:9px 13px; border-radius:8px; font-weight:600; font-size:14px; cursor:pointer; }
     .btn.gray { background:#6b7280; }
     .btn.red { background:#dc2626; }
     .btn.ghost { background:transparent; color:#374151; border:1px solid #e5e7eb; }
-    .btn:disabled { background:#9ca3af; }
+    .btn:disabled { background:#9ca3af; cursor:not-allowed; }
     .muted { color:#6b7280; font-size:12px; margin-top:6px;}
     .ok { color:#16a34a; font-size:13px; margin-top:8px;}
     .err { color:#dc2626; font-size:13px; margin-top:8px;}
@@ -30,7 +34,7 @@
     .doctor-item { display:flex; align-items:center; gap:6px; padding:6px 8px; border:1px solid #e5e7eb; border-radius:8px; background:#f9fafb; }
     .doctor-item .name { font-weight:600; }
     .doctor-item .docid { font-size:12px; color:#6b7280; }
-    .doctor-item.selected { background:#e0f2fe; border-color:#93c5fd; } /* destaque do selecionado */
+    .doctor-item.selected { background:#e0f2fe; border-color:#93c5fd; }
 
     .patients { max-height: 340px; overflow:auto; border:1px solid #e5e7eb; border-radius:10px; background:#fff; }
     .patient-row { display:flex; align-items:center; justify-content:space-between; padding:8px 10px; border-bottom:1px solid #f1f5f9; }
@@ -38,8 +42,10 @@
     .p-title { font-size:14px; font-weight:600; }
     .p-sub { font-size:12px; color:#6b7280; }
 
-    /* deixa o docId mais estreito sem quebrar layout */
-    .narrow { max-width: 260px; }
+    /* botão de toggler */
+    .toggler { display:inline-flex; align-items:center; gap:6px; }
+    .toggler .caret { transition: transform .15s linear; }
+    .toggler[aria-expanded="true"] .caret { transform: rotate(90deg); }
   </style>
 
   <!-- Firebase v8 (compatível iOS 10) -->
@@ -57,27 +63,35 @@
 
         <!-- ====== Médicos (docIds) ====== -->
         <div class="card">
-          <div class="row" style="align-items:flex-end; justify-content:space-between;">
+          <div class="row" style="align-items:center; justify-content:space-between;">
             <h2 style="margin:0;">Médicos</h2>
-            <!-- Botão discreto para remover o médico selecionado -->
-            <button class="btn ghost" id="btnRemoveSelected" title="Remover médico selecionado">Remover selecionado</button>
-          </div>
-
-          <div class="row">
-            <div class="col">
-              <label>Nome do médico</label>
-              <input type="text" id="doctorName" placeholder="Ex.: Dr. João">
-            </div>
-            <div class="col narrow">
-              <label>ID do documento</label>
-              <input type="text" id="doctorDocId" placeholder="Ex.: abc123">
-            </div>
-            <div style="align-self:flex-end;">
-              <button class="btn" id="btnAddDoctor">Adicionar</button>
+            <div class="row col-auto" style="gap:8px;">
+              <!-- botão para recolher/expandir cadastro -->
+              <button class="btn ghost toggler" id="btnToggleAdd" aria-expanded="false" title="Cadastrar/editar médicos">
+                <span class="caret">▶</span> Cadastrar médico
+              </button>
+              <!-- botão discreto de remover selecionado -->
+              <button class="btn ghost" id="btnRemoveSelected" title="Remover médico selecionado">Remover selecionado</button>
             </div>
           </div>
 
-          <div class="sep"></div>
+          <!-- bloco recolhível: adicionar médico -->
+          <div id="addDoctorBox" style="display:none; margin-top:8px;">
+            <div class="row">
+              <div class="col">
+                <label>Nome do médico</label>
+                <input type="text" id="doctorName" placeholder="Ex.: Dr. João">
+              </div>
+              <div class="col-narrow">
+                <label>ID do documento</label>
+                <input type="text" id="doctorDocId" placeholder="Ex.: abc123">
+              </div>
+              <div class="col-auto" style="align-self:flex-end;">
+                <button class="btn" id="btnAddDoctor">Adicionar</button>
+              </div>
+            </div>
+            <div class="sep"></div>
+          </div>
 
           <label>Escolha o médico para enviar</label>
           <div class="doctor-list" id="doctorList"></div>
@@ -127,7 +141,7 @@
 
 <script>
 (function(){
-  // ===== Helpers gerais =====
+  // ===== Helpers =====
   function $(id){ return document.getElementById(id); }
   function clean(s){ return String(s || '').replace(/\s+/g,' ').trim(); }
   function show(el, on){ el.style.display = on ? 'block' : 'none'; }
@@ -149,6 +163,8 @@
   var doctorListEl = $('doctorList');
   var noDoctorsNoteEl = $('noDoctorsNote');
   var btnRemoveSelected = $('btnRemoveSelected');
+  var btnToggleAdd = $('btnToggleAdd');
+  var addDoctorBox = $('addDoctorBox');
 
   var patientNameInput = $('patientName');
   var arInput = $('arFile');
@@ -163,8 +179,16 @@
 
   var doctors = []; // [{name, docId}]
   var selectedDoctor = null; // {name, docId}
+  var unsubscribePatients = null;
 
-  // ===== Inicializa Firebase com config pública em /firebase-config.json =====
+  // Toggle cadastro (recolhido por padrão)
+  btnToggleAdd.onclick = function(){
+    var open = addDoctorBox.style.display === 'block';
+    addDoctorBox.style.display = open ? 'none' : 'block';
+    btnToggleAdd.setAttribute('aria-expanded', open ? 'false' : 'true');
+  };
+
+  // ===== Inicializa Firebase (carrega config JSON) =====
   function loadJSON(url, cb){
     var xhr = new XMLHttpRequest();
     xhr.open('GET', url, true);
@@ -311,7 +335,7 @@
         var wrap = document.createElement('label');
         wrap.className = 'doctor-item';
         var isSelected = (selectedDoctor && selectedDoctor.docId === d.docId);
-        if (isSelected){ wrap.className += ' selected'; } // destaque visual
+        if (isSelected){ wrap.className += ' selected'; }
 
         var radio = document.createElement('input');
         radio.type = 'radio';
@@ -344,7 +368,7 @@
     subscribePatientsForSelected();
   }
 
-  // ===== Upload de arquivos =====
+  // Upload se houver arquivo
   function uploadIfAny(file, patientId, kind, cb){
     if (!file){ cb(null, null); return; }
     try {
@@ -368,12 +392,10 @@
     }
   }
 
-  // ===== Fluxo principal =====
-  var unsubscribePatients = null;
-
+  // Ações
   $('btnAddDoctor').onclick = function(){
-    var nm = clean(doctorNameInput.value);
-    var id = clean(doctorDocIdInput.value);
+    var nm = clean(doctorNameInput ? doctorNameInput.value : '');
+    var id = clean(doctorDocIdInput ? doctorDocIdInput.value : '');
     if (!nm || !id){ return; }
 
     var exists = false;
@@ -383,11 +405,10 @@
       saveDoctors();
       renderDoctors();
     }
-    doctorNameInput.value = '';
-    doctorDocIdInput.value = '';
+    if (doctorNameInput) doctorNameInput.value = '';
+    if (doctorDocIdInput) doctorDocIdInput.value = '';
   };
 
-  // Remover médico selecionado (botão discreto no topo)
   btnRemoveSelected.onclick = function(){
     if (!selectedDoctor || !selectedDoctor.docId) return;
     var target = selectedDoctor.docId;
@@ -474,7 +495,7 @@
     show(okEl, false); show(errEl, false);
   };
 
-  // ===== Boot: carrega config Firebase, autentica anônimo, carrega médicos do LS =====
+  // Boot
   loadJSON('/firebase-config.json', function(err, cfg){
     if (err){ statusEl.textContent = 'Erro ao carregar firebase-config.json'; return; }
     try {
@@ -485,6 +506,10 @@
       if (user){
         statusEl.style.display = 'none';
         appEl.style.display = 'block';
+
+        // inicia recolhido
+        addDoctorBox.style.display = 'none';
+        btnToggleAdd.setAttribute('aria-expanded','false');
 
         loadDoctors();
         loadSelectedDoctor();
@@ -497,7 +522,6 @@
       console.log(e);
     });
 
-    // tenta auth anon
     firebase.auth().signInAnonymously().catch(function(e){
       console.log('Auth anon:', e);
     });
