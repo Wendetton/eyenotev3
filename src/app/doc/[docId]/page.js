@@ -9,6 +9,7 @@ import {
   updateDoc,
   getDoc,
   collection,
+  addDoc,
   deleteDoc,
   serverTimestamp,
   query,
@@ -532,35 +533,60 @@ export default function DocumentPage() {
     }
   };
 
-  /* --------- Avisos: enviar / finalizar --------- */
-  const handleSendAlert = async ({ patientName, message }) => {
-    try {
-      if (!docId) return;
-      if (!selectedPatient) {
-        alert('Nenhum paciente selecionado.');
-        return;
-      }
-      const color = '#ef4444'; // vermelho
-      await setDoc(
-        doc(db, 'broadcasts', docId),
-        {
-          active: true,
-          message: (message || '').trim(),
-          color,
-          emittedByName: userName || 'Médico',
-          emittedByDocId: docId,
-          patientId: selectedPatient.id,
-          patientName: (patientName || selectedPatient.name || '').trim(),
-          updatedAt: serverTimestamp(),
-          startedAt: serverTimestamp()
-        },
-        { merge: true }
-      );
-    } catch (e) {
-      console.error('Erro ao enviar aviso:', e);
-      alert('Falha ao enviar aviso.');
+const handleSendAlert = async ({ patientName, message }) => {
+  try {
+    if (!docId) return;
+    if (!selectedPatient) {
+      alert('Nenhum paciente selecionado.');
+      return;
     }
-  };
+
+    // Normaliza a mensagem para códigos curtos MAIÚSCULOS (ex.: "COL | AVAL | OT")
+    const normalized = (message || '')
+      .toUpperCase()
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    const color = '#ef4444'; // vermelho (para manter compatibilidade visual)
+
+    // 1) Mantém o doc agregado (compat com a barra antiga, se você ainda usar)
+    await setDoc(
+      doc(db, 'broadcasts', docId),
+      {
+        active: true,
+        message: normalized,
+        color,
+        emittedByName: userName || 'Médico',
+        emittedByDocId: docId,
+        patientId: selectedPatient.id,
+        patientName: (patientName || selectedPatient.name || '').trim(),
+        updatedAt: serverTimestamp(),
+        startedAt: serverTimestamp()
+      },
+      { merge: true }
+    );
+
+    // 2) **Novo**: cria um registro individual para suportar **vários avisos simultâneos**
+    const alertsCol = collection(db, 'broadcasts', docId, 'alerts');
+    await addDoc(alertsCol, {
+      active: true,
+      message: normalized,
+      color,
+      emittedByName: userName || 'Médico',
+      emittedByDocId: docId,
+      patientId: selectedPatient.id,
+      patientName: (patientName || selectedPatient.name || '').trim(),
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+
+    // fecha o modal de aviso (se estiver aberto)
+    setShowAlertModal(false);
+  } catch (e) {
+    console.error('Erro ao enviar aviso:', e);
+    alert('Falha ao enviar aviso.');
+  }
+};
 
   const handleFinishAlert = async () => {
     try {
