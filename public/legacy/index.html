@@ -68,6 +68,26 @@
     .sound-pill { position: fixed; right: 10px; bottom: 10px; z-index: 10000; }
     .pill { padding:8px 10px; border-radius:9999px; border:1px solid #e5e7eb; background:#fff; font-weight:600; font-size:12px; }
     .pill.on { background:#10b981; color:#fff; border-color:#059669; }
+
+    /* ====== LISTA DE AVISOS (múltiplos) — ESCOPADA ====== */
+    .legacy-alerts { margin: 12px 0; }
+    .legacy-alerts.hidden { display: none; }
+    .legacy-alerts-item {
+      background: #fee2e2;
+      border: 1px solid #fecaca;
+      border-radius: 8px;
+      padding: 10px 12px;
+      margin-bottom: 8px;
+      animation: legacy-alerts-blink 1.2s steps(2, start) infinite;
+    }
+    @keyframes legacy-alerts-blink { to { visibility: hidden; } }
+    .legacy-alerts-title { font-weight:700; margin-bottom:4px; }
+    .legacy-alerts-line { font-size:14px; }
+    .legacy-alerts-line b { font-weight:700; }
+    .legacy-alerts-actions { margin-top:6px; }
+    .legacy-alerts-btn {
+      background:#ef4444; color:#fff; border:none; border-radius:6px; padding:6px 10px; font-size:12px; cursor:pointer;
+    }
   </style>
 
   <!-- Firebase v8 -->
@@ -80,6 +100,9 @@
   <div class="wrap">
     <div class="card">
       <h1>EyeNote – Uploader Legacy</h1>
+
+      <!-- NOVO: lista de avisos (múltiplos) -->
+      <div id="legacy-alerts-root" class="legacy-alerts hidden"></div>
 
       <!-- Barra de transmissão abaixo do título -->
       <div id="broadcastBar" class="broadcast">
@@ -208,6 +231,9 @@
   var broadcastMeta = $('broadcastMeta');
   var btnBroadcastOff = $('btnBroadcastOff');
 
+  // NOVO: Lista de avisos (múltiplos)
+  var legacyAlertsRoot = $('legacy-alerts-root');
+
   // Som
   var soundBtn = $('soundBtn');
   var audioCtx = null;
@@ -220,6 +246,7 @@
   var selectedDoctor = null; // {name, docId}
   var unsubscribePatients = null;
   var unsubscribeBroadcast = null;
+  var legacyAlertsUnsub = null; // NOVO
   var alertTimer = null;
 
   // Toggle cadastro recolhível
@@ -315,8 +342,6 @@
     unsubscribeBroadcast = ref.onSnapshot(function(doc){
       var data = doc.exists ? doc.data() : null;
       if (data && data.active && data.message){
-        // Rastreio do emissor — se o painel do médico enviar esses campos, usamos;
-        // senão, caímos no fallback do médico selecionado no iPad.
         var emitterName = (data.emittedByName && String(data.emittedByName)) || (selectedDoctor ? selectedDoctor.name : '—');
         var emitterDoc  = (data.emittedByDocId && String(data.emittedByDocId)) || (selectedDoctor ? selectedDoctor.docId : '—');
 
@@ -333,6 +358,90 @@
         resetBroadcastUI();
       }
     }, function(err){ console.log('Broadcast error', err); });
+  }
+
+  // ===== NOVO: Lista de avisos simultâneos (subcoleção) =====
+  function resetLegacyAlertsUI(){
+    if (!legacyAlertsRoot) return;
+    legacyAlertsRoot.innerHTML = '';
+    legacyAlertsRoot.className = 'legacy-alerts hidden';
+  }
+
+  function renderLegacyAlerts(snapshot){
+    if (!legacyAlertsRoot) return;
+    legacyAlertsRoot.innerHTML = '';
+
+    if (snapshot.empty){
+      legacyAlertsRoot.className = 'legacy-alerts hidden';
+      return;
+    }
+    legacyAlertsRoot.className = 'legacy-alerts';
+
+    snapshot.forEach(function(docSnap){
+      var data = docSnap.data() || {};
+      if (!data.active) return;
+
+      var medico = data.emittedByName || 'Médico';
+      var paciente = data.patientName || 'Paciente';
+      var msg = (data.message || '').toUpperCase(); // "COL | AVAL | OT"
+
+      var title = document.createElement('div');
+      title.className = 'legacy-alerts-title';
+      title.appendChild(document.createTextNode('<' + medico + ':>'));
+
+      var line = document.createElement('div');
+      line.className = 'legacy-alerts-line';
+
+      var bPatient = document.createElement('b');
+      bPatient.appendChild(document.createTextNode('Paciente ' + paciente));
+      line.appendChild(bPatient);
+      line.appendChild(document.createTextNode(': '));
+
+      var bMsg = document.createElement('b');
+      bMsg.appendChild(document.createTextNode(msg));
+      line.appendChild(bMsg);
+
+      var actions = document.createElement('div');
+      actions.className = 'legacy-alerts-actions';
+      var btn = document.createElement('button');
+      btn.className = 'legacy-alerts-btn';
+      btn.appendChild(document.createTextNode('Desativar'));
+      btn.onclick = function(){
+        docSnap.ref.set({ active:false, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge:true });
+      };
+      actions.appendChild(btn);
+
+      var item = document.createElement('div');
+      item.className = 'legacy-alerts-item';
+      item.appendChild(title);
+      item.appendChild(line);
+      item.appendChild(actions);
+
+      legacyAlertsRoot.appendChild(item);
+    });
+  }
+
+  function subscribeLegacyAlerts(){
+    if (legacyAlertsUnsub){ try{ legacyAlertsUnsub(); }catch(e){} legacyAlertsUnsub = null; }
+    resetLegacyAlertsUI();
+    if (!selectedDoctor || !selectedDoctor.docId) return;
+
+    var ref = firebase.firestore()
+      .collection('broadcasts').doc(selectedDoctor.docId)
+      .collection('alerts')
+      .where('active','==',true)
+      .orderBy('createdAt','desc');
+
+    legacyAlertsUnsub = ref.onSnapshot(function(snap){
+      renderLegacyAlerts(snap);
+    }, function(err){
+      console.log('Alerts listener error:', err);
+    });
+  }
+
+  function unsubscribeLegacyAlerts(){
+    if (legacyAlertsUnsub){ try{ legacyAlertsUnsub(); }catch(e){} legacyAlertsUnsub = null; }
+    resetLegacyAlertsUI();
   }
 
   // ===== Pacientes =====
@@ -424,6 +533,7 @@
       saveSelectedDoctor();
       renderPatients([]);
       subscribeBroadcast();
+      unsubscribeLegacyAlerts(); // limpa lista de avisos
       return;
     }
     show(noDoctorsNoteEl, false);
@@ -445,6 +555,7 @@
           renderDoctors();
           subscribePatientsForSelected();
           subscribeBroadcast();
+          subscribeLegacyAlerts(); // NOVO
         };
 
         var nm = document.createElement('span');
@@ -466,6 +577,7 @@
     }
     subscribePatientsForSelected();
     subscribeBroadcast();
+    subscribeLegacyAlerts(); // NOVO
   }
 
   // Upload se houver arquivo
