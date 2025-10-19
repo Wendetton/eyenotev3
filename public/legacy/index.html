@@ -58,16 +58,11 @@
       border-radius: 8px;
       margin: 10px 0 12px 0; /* entre título e box Médicos */
     }
-    .broadcast.pulse { animation: pulseFlash 1s linear infinite; }
-    @keyframes pulseFlash { 0%,100%{filter:brightness(1);} 50%{filter:brightness(1.35);} }
+    .broadcast.pulse { animation: pulseFlash 2.5s linear infinite; } /* mais suave */
+    @keyframes pulseFlash { 0%,100%{filter:brightness(1);} 50%{filter:brightness(1.25);} }
     .broadcast .topline { display:flex; align-items:center; justify-content:space-between; gap:10px; }
     .broadcast .msg { display:block; margin-top:6px; }
     .broadcast .mini { background:#fff; color:#b91c1c; border:1px solid #fecaca; font-weight:700; padding:6px 8px; border-radius:8px; }
-
-    /* Botão som */
-    .sound-pill { position: fixed; right: 10px; bottom: 10px; z-index: 10000; }
-    .pill { padding:8px 10px; border-radius:9999px; border:1px solid #e5e7eb; background:#fff; font-weight:600; font-size:12px; }
-    .pill.on { background:#10b981; color:#fff; border-color:#059669; }
 
     /* ====== LISTA DE AVISOS (múltiplos) — ESCOPADA ====== */
     .legacy-alerts { margin: 12px 0; }
@@ -78,9 +73,8 @@
       border-radius: 8px;
       padding: 10px 12px;
       margin-bottom: 8px;
-      animation: legacy-alerts-blink 1.2s steps(2, start) infinite;
+      /* Sem animação aqui para evitar “piscadas” excessivas */
     }
-    @keyframes legacy-alerts-blink { to { visibility: hidden; } }
     .legacy-alerts-title { font-weight:700; margin-bottom:4px; }
     .legacy-alerts-line { font-size:14px; }
     .legacy-alerts-line b { font-weight:700; }
@@ -101,7 +95,7 @@
     <div class="card">
       <h1>EyeNote – Uploader Legacy</h1>
 
-      <!-- NOVO: lista de avisos (múltiplos) -->
+      <!-- Lista de avisos (múltiplos) -->
       <div id="legacy-alerts-root" class="legacy-alerts hidden"></div>
 
       <!-- Barra de transmissão abaixo do título -->
@@ -196,7 +190,6 @@
 
 <script>
 (function(){
-  // ===== Helpers =====
   function $(id){ return document.getElementById(id); }
   function clean(s){ return String(s || '').replace(/\s+/g,' ').trim(); }
   function show(el, on){ el.style.display = on ? 'block' : 'none'; }
@@ -225,16 +218,13 @@
 
   var patientsBox = $('patientsBox');
 
-  // Broadcast DOM
   var broadcastBar = $('broadcastBar');
   var broadcastMsg = $('broadcastMsg');
   var broadcastMeta = $('broadcastMeta');
   var btnBroadcastOff = $('btnBroadcastOff');
 
-  // NOVO: Lista de avisos (múltiplos)
   var legacyAlertsRoot = $('legacy-alerts-root');
 
-  // Som
   var soundBtn = $('soundBtn');
   var audioCtx = null;
   var soundEnabled = false;
@@ -242,21 +232,19 @@
   var LS_DOCTORS = 'legacy_doctors_v1';
   var LS_SELECTED = 'legacy_selected_doctor_v1';
 
-  var doctors = []; // [{name, docId}]
-  var selectedDoctor = null; // {name, docId}
+  var doctors = [];
+  var selectedDoctor = null;
   var unsubscribePatients = null;
   var unsubscribeBroadcast = null;
-  var legacyAlertsUnsub = null; // NOVO
+  var legacyAlertsUnsub = null;
   var alertTimer = null;
 
-  // Toggle cadastro recolhível
   btnToggleAdd.onclick = function(){
     var open = addDoctorBox.style.display === 'block';
     addDoctorBox.style.display = open ? 'none' : 'block';
     btnToggleAdd.setAttribute('aria-expanded', open ? 'false' : 'true');
   };
 
-  // ===== Som (iOS 10 exige gesto) =====
   soundBtn.onclick = function(){
     try {
       if (!audioCtx){
@@ -279,7 +267,7 @@
       var osc = audioCtx.createOscillator();
       var gain = audioCtx.createGain();
       osc.type = 'sine';
-      osc.frequency.value = 880;      // A5
+      osc.frequency.value = 880;
       gain.gain.setValueAtTime(0.001, audioCtx.currentTime);
       gain.gain.exponentialRampToValueAtTime(0.6, audioCtx.currentTime + 0.01);
       gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
@@ -290,7 +278,6 @@
     } catch(e){}
   }
 
-  // ===== Firebase boot =====
   function loadJSON(url, cb){
     var xhr = new XMLHttpRequest();
     xhr.open('GET', url, true);
@@ -314,7 +301,6 @@
   function saveSelectedDoctor(){ try { localStorage.setItem(LS_SELECTED, JSON.stringify(selectedDoctor || null)); } catch(e){} }
   function loadSelectedDoctor(){ try { var s = localStorage.getItem(LS_SELECTED); if (s) selectedDoctor = JSON.parse(s) || null; } catch(e){ selectedDoctor = null; } }
 
-  // ===== Broadcast =====
   btnBroadcastOff.onclick = function(){
     if (!selectedDoctor || !selectedDoctor.docId) return;
     firebase.firestore().collection('broadcasts').doc(selectedDoctor.docId).set(
@@ -360,7 +346,8 @@
     }, function(err){ console.log('Broadcast error', err); });
   }
 
-  // ===== NOVO: Lista de avisos simultâneos (subcoleção) =====
+  /* ====== AVISOS MÚLTIPLOS (subcoleção) ====== */
+
   function resetLegacyAlertsUI(){
     if (!legacyAlertsRoot) return;
     legacyAlertsRoot.innerHTML = '';
@@ -371,13 +358,22 @@
     if (!legacyAlertsRoot) return;
     legacyAlertsRoot.innerHTML = '';
 
-    // Coleta documentos e filtra no cliente (evita índice composto).
+    // Coleta e filtra no cliente + DEDUPE por (docId + paciente + msg + médico)
+    var seen = {};
     var items = [];
     snapshot.forEach(function(docSnap){
       var data = docSnap.data() || {};
-      if (data && data.active) {
-        items.push({ id: docSnap.id, data: data, ref: docSnap.ref });
-      }
+      if (!data || !data.active) return;
+
+      var medico = data.emittedByName || 'Médico';
+      var paciente = data.patientName || data.patient || data.name || 'Paciente';
+      var msg = (data.message || '').toUpperCase();
+
+      var key = (selectedDoctor ? selectedDoctor.docId : '—') + '|' + medico + '|' + paciente + '|' + msg;
+      if (seen[key]) return;
+      seen[key] = true;
+
+      items.push({ id: docSnap.id, data: data, ref: docSnap.ref });
     });
 
     if (!items.length){
@@ -393,9 +389,8 @@
         var ref = items[idx].ref;
 
         var medico = d.emittedByName || 'Médico';
-        // Fallbacks para nome do paciente
         var paciente = d.patientName || d.patient || d.name || 'Paciente';
-        var msg = (d.message || '').toUpperCase(); // "COL | AVAL | OT"
+        var msg = (d.message || '').toUpperCase();
 
         var title = document.createElement('div');
         title.className = 'legacy-alerts-title';
@@ -434,12 +429,12 @@
     }
   }
 
+  var legacyAlertsUnsub = null;
   function subscribeLegacyAlerts(){
     if (legacyAlertsUnsub){ try{ legacyAlertsUnsub(); }catch(e){} legacyAlertsUnsub = null; }
     resetLegacyAlertsUI();
     if (!selectedDoctor || !selectedDoctor.docId) return;
 
-    // Sem where; apenas orderBy + limit — evita índice composto.
     var ref = firebase.firestore()
       .collection('broadcasts').doc(selectedDoctor.docId)
       .collection('alerts')
@@ -458,7 +453,8 @@
     resetLegacyAlertsUI();
   }
 
-  // ===== Pacientes =====
+  /* ====== Pacientes ====== */
+
   function subscribePatientsForSelected(){
     if (unsubscribePatients){ try{ unsubscribePatients(); }catch(e){} unsubscribePatients = null; }
     if (!selectedDoctor || !selectedDoctor.docId){
@@ -547,7 +543,7 @@
       saveSelectedDoctor();
       renderPatients([]);
       subscribeBroadcast();
-      unsubscribeLegacyAlerts(); // limpa lista de avisos
+      unsubscribeLegacyAlerts();
       return;
     }
     show(noDoctorsNoteEl, false);
@@ -569,7 +565,7 @@
           renderDoctors();
           subscribePatientsForSelected();
           subscribeBroadcast();
-          subscribeLegacyAlerts(); // NOVO
+          subscribeLegacyAlerts();
         };
 
         var nm = document.createElement('span');
@@ -591,10 +587,9 @@
     }
     subscribePatientsForSelected();
     subscribeBroadcast();
-    subscribeLegacyAlerts(); // NOVO
+    subscribeLegacyAlerts();
   }
 
-  // Upload se houver arquivo
   function uploadIfAny(file, patientId, kind, cb){
     if (!file){ cb(null, null); return; }
     try {
@@ -618,7 +613,6 @@
     }
   }
 
-  // Ações
   $('btnAddDoctor').onclick = function(){
     var nm = clean(doctorNameInput ? doctorNameInput.value : '');
     var id = clean(doctorDocIdInput ? doctorDocIdInput.value : '');
@@ -687,7 +681,6 @@
 
   btnReset.onclick = function(){ patientNameInput.value=''; arInput.value=''; tonoInput.value=''; show(okEl,false); show(errEl,false); };
 
-  // Boot
   loadJSON('/firebase-config.json', function(err, cfg){
     if (err){ statusEl.textContent = 'Erro ao carregar firebase-config.json'; return; }
     try { firebase.initializeApp(cfg); } catch(e){ statusEl.textContent = 'Falha ao inicializar Firebase.'; return; }
@@ -697,7 +690,6 @@
         statusEl.style.display='none'; appEl.style.display='block';
         addDoctorBox.style.display='none'; btnToggleAdd.setAttribute('aria-expanded','false');
 
-        // Som começa desativado; toque “Ativar som” 1x
         soundBtn.className = 'pill'; soundBtn.textContent = '🔊 Ativar som';
 
         loadDoctors(); loadSelectedDoctor(); renderDoctors();
