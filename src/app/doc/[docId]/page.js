@@ -533,13 +533,62 @@ export default function DocumentPage() {
     }
   };
 
-const handleSendAlert = async ({ patientName, message }) => {
+// Emite aviso para o Legacy (barra + item em lista)
+const handleSendAlert = async () => {
+  if (!selectedPatient) {
+    alert('Selecione um paciente antes de emitir aviso.');
+    return;
+  }
+
+  // Texto que vai na barra/lista: "COL" | "AVAL" | "OT"
+  const msg = (pendingAlertMessage || '').trim().toUpperCase(); // se você usa os botões COL/AVAL/OT, garanta que cai aqui
+  const patientName = (pendingAlertName || selectedPatient.name || '').trim();
+  if (!msg) {
+    alert('Escolha uma mensagem (COL / AVAL / OT).');
+    return;
+  }
+
   try {
-    if (!docId) return;
-    if (!selectedPatient) {
-      alert('Nenhum paciente selecionado.');
-      return;
-    }
+    const rootRef = doc(db, 'broadcasts', docId);
+    const alertsCol = collection(db, 'broadcasts', docId, 'alerts');
+    const alertRef = doc(alertsCol); // id aleatório
+
+    // payload padrão
+    const payload = {
+      message: msg,                  // "COL" | "AVAL" | "OT"
+      patientName,                   // <- **ESSENCIAL** para a barra mostrar o nome e para a deduplicação
+      emittedByDocId: docId,
+      emittedByName: userName || 'Médico',
+      active: true,
+      createdAt: serverTimestamp()
+    };
+
+    // 1) Atualiza a BARRA (doc raiz) com o MESMO conteúdo
+    await setDoc(
+      rootRef,
+      {
+        active: true,
+        message: payload.message,
+        patientName: payload.patientName,           // <- **gravado no raiz**
+        emittedByDocId: payload.emittedByDocId,
+        emittedByName: payload.emittedByName,
+        updatedAt: serverTimestamp()
+      },
+      { merge: true }
+    );
+
+    // 2) Cria item na LISTA (subcoleção)
+    await setDoc(alertRef, payload);
+
+    // fecha modal/limpa campos locais se você usa
+    setShowAlertModal(false);
+    setPendingAlertMessage('');
+  } catch (err) {
+    console.error('Erro ao emitir aviso:', err);
+    alert('Falha ao emitir aviso.');
+  }
+};
+
 
     const normalized = (message || '')
       .toUpperCase()
