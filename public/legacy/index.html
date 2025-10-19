@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <title>EyeNote Legacy Uploader</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- Estilos simples para caber em telas antigas -->
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; background:#f6f7fb; margin:0; }
+    .wrap { max-width: 760px; margin: 12px auto 32px; padding: 12px; }
+    .card { background:#fff; padding:14px; border-radius:10px; box-shadow:0 2px 8px rgba(0,0,0,.08); }
+    h1 { font-size: 20px; margin: 0 0 12px; }
+    label { display:block; font-size:13px; color:#374151; margin:10px 0 6px; }
+    input[type="text"], select { width:100%; padding:10px; border:1px solid #d1d5db; border-radius:8px; font-size:14px; }
+    input[type="file"] { width:100%; }
+    .row { display:flex; gap:12px; }
+    .col { flex:1; }
+    .btn { display:inline-block; background:#2563eb; color:#fff; border:none; padding:10px 14px; border-radius:8px; font-weight:600; }
+    .btn:disabled { background:#9ca3af; }
+    .muted { color:#6b7280; font-size:12px; margin-top:6px;}
+    .ok { color:#16a34a; font-size:13px; margin-top:8px;}
+    .err { color:#dc2626; font-size:13px; margin-top:8px;}
+    .sep { height:1px; background:#e5e7eb; margin:14px 0; }
+  </style>
+
+  <!-- Firebase v8 (compatível com iOS 10) -->
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-storage.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>EyeNote – Uploader Legacy (iPad antigo)</h1>
+      <p class="muted">
+        Use este formulário simples para <strong>criar paciente</strong> e <strong>enviar exames</strong> (AR / Tonometria).
+        Ele grava no mesmo Firestore/Storage do EyeNote. Não é necessário login (auth anônima).
+      </p>
+
+      <div id="status" class="muted">Carregando configuração...</div>
+      <div id="form" style="display:none">
+
+        <label for="docId">ID do Documento (obrigatório)</label>
+        <input type="text" id="docId" placeholder="ex.: abc123 (o mesmo docId que você usa no EyeNote)">
+
+        <label for="patientName">Nome do Paciente (obrigatório)</label>
+        <input type="text" id="patientName" placeholder="ex.: Maria Silva">
+
+        <div class="row">
+          <div class="col">
+            <label for="arFile">Imagem AR (opcional)</label>
+            <input type="file" id="arFile" accept="image/*">
+          </div>
+          <div class="col">
+            <label for="tonoFile">Imagem Tonometria (opcional)</label>
+            <input type="file" id="tonoFile" accept="image/*">
+          </div>
+        </div>
+
+        <div class="sep"></div>
+
+        <div class="row">
+          <button id="btnCreate" class="btn">Criar/Enviar</button>
+          <button id="btnReset" class="btn" style="background:#6b7280">Limpar</button>
+        </div>
+
+        <div id="msgOk" class="ok" style="display:none"></div>
+        <div id="msgErr" class="err" style="display:none"></div>
+
+        <p class="muted">
+          Dicas: mantenha as imagens menores que ~5MB para iPad antigo. Você pode anexar apenas AR, apenas Tonometria, ou as duas.
+        </p>
+      </div>
+    </div>
+  </div>
+
+<script>
+(function(){
+  // Helpers
+  function $(id){ return document.getElementById(id); }
+  function clean(s){ return String(s || '').replace(/\s+/g,' ').trim(); }
+
+  var statusEl = $('status'), formEl = $('form'), okEl = $('msgOk'), errEl = $('msgErr');
+  var btnCreate = $('btnCreate'), btnReset = $('btnReset');
+  var docIdInput = $('docId'), nameInput = $('patientName'), arInput = $('arFile'), tonoInput = $('tonoFile');
+
+  // Carregar firebase-config.json
+  function loadJSON(url, cb){
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', url, true);
+    xhr.onreadystatechange = function(){
+      if (xhr.readyState === 4){
+        if (xhr.status >= 200 && xhr.status < 300){
+          try { cb(null, JSON.parse(xhr.responseText)); }
+          catch(e){ cb(e); }
+        } else {
+          cb(new Error('HTTP '+xhr.status));
+        }
+      }
+    };
+    xhr.send();
+  }
+
+  function showErr(msg){
+    errEl.style.display = 'block';
+    errEl.textContent = msg;
+    okEl.style.display = 'none';
+  }
+  function showOk(msg){
+    okEl.style.display = 'block';
+    okEl.textContent = msg;
+    errEl.style.display = 'none';
+  }
+  function busy(on){
+    btnCreate.disabled = !!on;
+    btnReset.disabled = !!on;
+  }
+
+  // Inicializa Firebase com config do EyeNote
+  loadJSON('/firebase-config.json', function(err, cfg){
+    if (err){ statusEl.textContent = 'Erro ao carregar firebase-config.json'; return; }
+    try {
+      firebase.initializeApp(cfg); // EyeNote project
+      firebase.auth().signInAnonymously().catch(function(e){
+        console.log('Auth anônima falhou (pode não ser necessária):', e);
+      });
+      statusEl.style.display = 'none';
+      formEl.style.display = 'block';
+    } catch(e){
+      statusEl.textContent = 'Falha ao inicializar Firebase.';
+      return;
+    }
+  });
+
+  // Upload Helper
+  function uploadIfAny(file, patientId, kind, cb){
+    if (!file){ cb(null, null); return; }
+    try {
+      var path = 'exams/'+ patientId + '/' + kind + '_' + Date.now() + '.jpg';
+      var ref = firebase.storage().ref().child(path);
+      var task = ref.put(file, { contentType: file.type || 'image/jpeg' });
+      task.on('state_changed',
+        function(){}, // progresso omitido no legacy
+        function(err){ cb(err); },
+        function(){
+          ref.getDownloadURL().then(function(url){
+            cb(null, { url: url, path: path });
+          }).catch(function(e){ cb(e); });
+        }
+      );
+    } catch(e){
+      cb(e);
+    }
+  }
+
+  // Criar paciente e anexar exames
+  btnCreate.onclick = function(){
+    var docId = clean(docIdInput.value);
+    var name  = clean(nameInput.value);
+    var arF   = arInput.files[0] || null;
+    var toF   = tonoInput.files[0] || null;
+
+    if (!docId){ showErr('Informe o ID do documento.'); return; }
+    if (!name){ showErr('Informe o nome do paciente.'); return; }
+
+    busy(true); showOk(''); showErr('');
+
+    // Gera um ID local (padrão do seu app) — compatível com o que você já usa
+    var patientId = 'p_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2,8);
+
+    // Subir os arquivos (se houver)
+    uploadIfAny(arF,  patientId, 'ar', function(err1, arRes){
+      if (err1){ busy(false); showErr('Falha no upload AR: '+ (err1.message || err1)); return; }
+
+      uploadIfAny(toF, patientId, 'tonometry', function(err2, toRes){
+        if (err2){ busy(false); showErr('Falha no upload Tonometria: '+ (err2.message || err2)); return; }
+
+        // Monta objeto exams como o seu app espera
+        var exams = {};
+        if (arRes){
+          exams.ar = {
+            uploaded: true,
+            url: arRes.url,
+            uploadedAt: firebase.firestore.FieldValue.serverTimestamp()
+          };
+        }
+        if (toRes){
+          exams.tonometry = {
+            uploaded: true,
+            url: toRes.url,
+            uploadedAt: firebase.firestore.FieldValue.serverTimestamp()
+          };
+        }
+
+        // Cria documento do paciente no Firestore (coleção raiz "patients")
+        var data = {
+          id: patientId,
+          name: name,
+          status: 'active',
+          documentId: docId,  // MUITO IMPORTANTE para aparecer na lista do médico vinculada a esse doc
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        };
+        if (Object.keys(exams).length > 0){
+          data.exams = exams;
+        }
+
+        firebase.firestore().collection('patients').doc(patientId).set(data, { merge: true })
+          .then(function(){
+            showOk('Paciente criado e exames enviados com sucesso.');
+            // limpa inputs (mantém o docId para facilitar)
+            nameInput.value = '';
+            arInput.value = '';
+            tonoInput.value = '';
+          })
+          .catch(function(e){
+            showErr('Erro ao salvar paciente: ' + (e.message || e));
+          })
+          .finally(function(){
+            busy(false);
+          });
+      });
+    });
+  };
+
+  btnReset.onclick = function(){
+    nameInput.value = '';
+    arInput.value = '';
+    tonoInput.value = '';
+    errEl.style.display = 'none';
+    okEl.style.display  = 'none';
+  };
+})();
+</script>
+</body>
+</html>
