@@ -1,699 +1,456 @@
 <!doctype html>
 <html lang="pt-BR">
 <head>
-  <meta charset="utf-8">
-  <title>EyeNote Legacy</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-
+  <meta charset="utf-8" />
+  <title>EyeNote – Uploader Legacy</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; background:#f6f7fb; margin:0; }
-    .wrap { max-width: 900px; margin: 10px auto 28px; padding: 10px; }
-    .card { background:#fff; padding:12px; border-radius:10px; box-shadow:0 2px 8px rgba(0,0,0,.08); margin-bottom:12px; }
-    h1 { font-size: 20px; margin: 0 0 8px; }
-    h2 { font-size: 16px; margin: 0 0 10px; }
-    label { display:block; font-size:13px; color:#374151; margin:8px 0 6px; }
-    input[type="text"], select { width:100%; padding:9px; border:1px solid #d1d5db; border-radius:8px; font-size:14px; box-sizing: border-box; }
-    input[type="file"] { width:100%; }
-    .row { display:flex; flex-wrap:wrap; gap:10px; }
-    .col { flex: 1 1 260px; min-width: 200px; }
-    .col-narrow { flex: 0 0 240px; min-width: 220px; }
-    .col-auto { flex: 0 0 auto; }
-    .btn { display:inline-block; background:#2563eb; color:#fff; border:none; padding:9px 13px; border-radius:8px; font-weight:600; font-size:14px; cursor:pointer; }
-    .btn.gray { background:#6b7280; }
-    .btn.red { background:#dc2626; }
-    .btn.ghost { background:transparent; color:#374151; border:1px solid #e5e7eb; }
-    .btn:disabled { background:#9ca3af; cursor:not-allowed; }
-    .muted { color:#6b7280; font-size:12px; margin-top:6px;}
-    .ok { color:#16a34a; font-size:13px; margin-top:8px;}
-    .err { color:#dc2626; font-size:13px; margin-top:8px;}
-    .sep { height:1px; background:#e5e7eb; margin:12px 0; }
-
-    .doctor-list { display:flex; flex-wrap:wrap; gap:8px; }
-    .doctor-item { display:flex; align-items:center; gap:6px; padding:6px 8px; border:1px solid #e5e7eb; border-radius:8px; background:#f9fafb; }
-    .doctor-item .name { font-weight:600; }
-    .doctor-item .docid { font-size:12px; color:#6b7280; }
-    .doctor-item.selected { background:#e0f2fe; border-color:#93c5fd; }
-
-    .patients { max-height: 340px; overflow:auto; border:1px solid #e5e7eb; border-radius:10px; background:#fff; }
-    .patient-row { display:flex; align-items:center; justify-content:space-between; padding:8px 10px; border-bottom:1px solid #f1f5f9; }
-    .patient-row:last-child { border-bottom:none; }
-    .p-title { font-size:14px; font-weight:600; }
-    .p-sub { font-size:12px; color:#6b7280; }
-
-    .toggler { display:inline-flex; align-items:center; gap:6px; }
-    .toggler .caret { transition: transform .15s linear; }
-    .toggler[aria-expanded="true"] .caret { transform: rotate(90deg); }
-
-    /* ===== Barra de transmissão (vermelha) ===== */
-    .broadcast {
-      display: none;
-      color: #fff;
-      background: #ef4444;
-      padding: 10px 12px;
-      font-weight: 800;
-      text-transform: uppercase;
-      letter-spacing: .5px;
-      text-align: left;
-      border: 2px solid #b91c1c;
-      border-radius: 8px;
-      margin: 10px 0 12px 0;
+    :root {
+      --gray-50:#f9fafb; --gray-100:#f3f4f6; --gray-200:#e5e7eb; --gray-300:#d1d5db;
+      --gray-600:#4b5563; --gray-700:#374151; --gray-900:#111827;
+      --blue-600:#2563eb; --blue-700:#1d4ed8;
+      --emerald-600:#059669; --yellow-600:#ca8a04;
+      --red-50:#fef2f2; --red-100:#fee2e2; --red-300:#fca5a5; --red-600:#dc2626; --red-700:#b91c1c;
+      --orange-500:#f97316;
+      --indigo-600:#4f46e5;
+      --radius:12px;
     }
-    .broadcast.pulse { animation: pulseFlash 2.5s linear infinite; } /* mais suave */
-    @keyframes pulseFlash { 0%,100%{filter:brightness(1);} 50%{filter:brightness(1.25);} }
-    .broadcast .topline { display:flex; align-items:center; justify-content:space-between; gap:10px; }
-    .broadcast .msg { display:block; margin-top:6px; }
-    .broadcast .mini { background:#fff; color:#b91c1c; border:1px solid #fecaca; font-weight:700; padding:6px 8px; border-radius:8px; }
-
-    /* ===== Lista de avisos empilhados ===== */
-    .alerts { margin: 10px 0 12px; }
-    .alerts.hidden { display: none; }
-    .alert-item {
-      background: #fee2e2;
-      border: 1px solid #fecaca;
-      border-radius: 8px;
-      padding: 10px 12px;
-      margin-bottom: 8px;
+    body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:#f5f7fb;color:#111;}
+    .container{max-width:1080px;margin:28px auto;padding:0 16px;}
+    h1{font-size:28px;margin:0 0 14px 0}
+    .card{background:#fff;border:1px solid var(--gray-200);border-radius:var(--radius);padding:18px;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+    .row{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+    .row-right{margin-left:auto}
+    .btn{display:inline-flex;align-items:center;justify-content:center;border-radius:8px;border:1px solid transparent;
+         padding:8px 14px;font-weight:600;cursor:pointer;user-select:none}
+    .btn:disabled{opacity:.5;cursor:not-allowed}
+    .btn-primary{background:var(--blue-600);color:#fff}
+    .btn-primary:hover{background:var(--blue-700)}
+    .btn-danger{background:#fff;color:var(--red-700);border-color:var(--red-300)}
+    .btn-danger:hover{background:var(--red-50)}
+    .btn-outline{background:#fff;border-color:var(--gray-300);color:var(--gray-700)}
+    .btn-outline:hover{background:var(--gray-50)}
+    .input{width:100%;padding:10px 12px;border:1px solid var(--gray-300);border-radius:10px;outline:none}
+    .section-title{font-size:18px;font-weight:700;margin:0 0 10px 0}
+    .muted{color:var(--gray-600);font-size:13px}
+    .pill{display:inline-flex;align-items:center;border:1px solid var(--gray-300);padding:6px 10px;border-radius:999px;gap:8px}
+    .pill[data-selected="true"]{border-color:var(--indigo-600);box-shadow:0 0 0 2px rgba(79,70,229,.15)}
+    .blink{animation:blink 1.2s linear infinite}
+    @keyframes blink{0%,60%{opacity:1} 70%{opacity:.55} 80%{opacity:1} 90%{opacity:.55} 100%{opacity:1}}
+    .alert-banner{
+      background:var(--red-600); color:#fff; border-radius:var(--radius); padding:16px;
+      display:flex; align-items:center; justify-content:space-between; gap:12px;
     }
-    .alert-title { font-weight:700; margin-bottom:4px; }
-    .alert-line { font-size:14px; }
-    .alert-line b { font-weight:700; }
+    .alert-lines{line-height:1.1}
+    .alert-lines .small{opacity:.95;font-size:13px}
+    .alert-cards{margin-top:12px}
+    .alert-card{
+      background:var(--red-50); border:1px solid var(--red-300); color:#7f1d1d;
+      border-radius:var(--radius); padding:12px; font-weight:600;
+    }
+    .strong{font-weight:800}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    @media (max-width:720px){ .grid{grid-template-columns:1fr} }
+    details summary{cursor:pointer;list-style:none}
+    details summary::-webkit-details-marker{display:none}
+    .caret::before{content:'▸';display:inline-block;margin-right:6px;transform:translateY(-1px)}
+    details[open] .caret::before{content:'▾'}
   </style>
-
-  <!-- Firebase v8 (iOS 10 compatível) -->
-  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-storage.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
 </head>
 <body>
-  <div class="wrap">
-    <div class="card">
-      <h1>EyeNote – Uploader Legacy</h1>
+  <div class="container">
 
-      <!-- Barra de transmissão (agregada) -->
-      <div id="broadcastBar" class="broadcast">
-        <div class="topline">
-          <div id="broadcastMeta">—</div>
-          <button id="btnBroadcastOff" class="mini" title="Desativar alerta para todos">Desativar alerta</button>
+    <h1>EyeNote – Uploader Legacy</h1>
+
+    <!-- BARRA DE ALERTA (pisca) -->
+    <div id="alert-root" style="margin-bottom:12px; display:none;">
+      <div class="alert-banner blink">
+        <div class="alert-lines" id="alert-root-text">
+          <!-- preenche via JS -->
         </div>
-        <div id="broadcastMsg" class="msg"></div>
+        <button id="btnDeactivate" class="btn btn-danger">Desativar alerta</button>
+      </div>
+      <div id="alert-list" class="alert-cards"><!-- itens simultâneos aparecem aqui --></div>
+    </div>
+
+    <!-- MÉDICOS -->
+    <div class="card" style="margin-top:12px">
+      <div class="row">
+        <div class="section-title">Médicos</div>
+        <div class="row-right">
+          <button id="btnRemoveSelected" class="btn btn-outline">Remover selecionado</button>
+        </div>
       </div>
 
-      <!-- Lista de avisos empilhados -->
-      <div id="alertsRoot" class="alerts hidden"></div>
-
-      <div id="status" class="muted">Carregando...</div>
-      <div id="app" style="display:none">
-
-        <!-- ===== Médicos ===== -->
-        <div class="card">
-          <div class="row" style="align-items:center; justify-content:space-between;">
-            <h2 style="margin:0;">Médicos</h2>
-            <div class="row col-auto" style="gap:8px;">
-              <button class="btn ghost toggler" id="btnToggleAdd" aria-expanded="false" title="Cadastrar/editar médicos">
-                <span class="caret">▶</span> Cadastrar médico
-              </button>
-              <button class="btn ghost" id="btnRemoveSelected" title="Remover médico selecionado">Remover selecionado</button>
-            </div>
+      <details id="doctorAddBox" style="margin-top:10px">
+        <summary class="pill caret">Cadastrar médico</summary>
+        <div class="grid" style="margin-top:10px">
+          <div>
+            <label class="muted">Nome do médico</label>
+            <input id="inpDocName" class="input" placeholder="Ex.: Dr. João"/>
           </div>
-
-          <div id="addDoctorBox" style="display:none; margin-top:8px;">
-            <div class="row">
-              <div class="col">
-                <label>Nome do médico</label>
-                <input type="text" id="doctorName" placeholder="Ex.: Dr. João">
-              </div>
-              <div class="col-narrow">
-                <label>ID do documento</label>
-                <input type="text" id="doctorDocId" placeholder="Ex.: abc123">
-              </div>
-              <div class="col-auto" style="align-self:flex-end;">
-                <button class="btn" id="btnAddDoctor">Adicionar</button>
-              </div>
-            </div>
-            <div class="sep"></div>
+          <div>
+            <label class="muted">ID do documento</label>
+            <input id="inpDocId" class="input" placeholder="Ex.: xqw91md52y" style="max-width:280px"/>
           </div>
-
-          <label>Escolha o médico para enviar</label>
-          <div class="doctor-list" id="doctorList"></div>
-          <div class="muted" id="noDoctorsNote" style="display:none;">Nenhum médico cadastrado.</div>
         </div>
-
-        <!-- ===== Novo Paciente / Exames ===== -->
-        <div class="card">
-          <h2>Novo Paciente / Exames</h2>
-          <div class="row">
-            <div class="col">
-              <label>Paciente (nome)</label>
-              <input type="text" id="patientName" placeholder="Ex.: Maria Silva">
-            </div>
-          </div>
-
-          <div class="row">
-            <div class="col">
-              <label>AR (imagem)</label>
-              <input type="file" id="arFile" accept="image/*">
-            </div>
-            <div class="col">
-              <label>Tonometria (imagem)</label>
-              <input type="file" id="tonoFile" accept="image/*">
-            </div>
-          </div>
-
-          <div class="sep"></div>
-          <div class="row">
-            <button id="btnCreate" class="btn">Criar/Enviar</button>
-            <button id="btnReset" class="btn gray">Limpar</button>
-          </div>
-          <div id="msgOk" class="ok" style="display:none"></div>
-          <div id="msgErr" class="err" style="display:none"></div>
+        <div style="margin-top:10px">
+          <button id="btnAddDoctor" class="btn btn-primary">Adicionar</button>
         </div>
+      </details>
 
-        <!-- ===== Pacientes ===== -->
-        <div class="card">
-          <h2>Pacientes do Médico Selecionado</h2>
-          <div class="patients" id="patientsBox"></div>
+      <div style="margin-top:12px" class="muted">Escolha o médico para enviar</div>
+      <div id="doctorList" style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px"></div>
+    </div>
+
+    <!-- NOVO PACIENTE / EXAMES -->
+    <div class="card" style="margin-top:14px">
+      <div class="section-title">Novo Paciente / Exames</div>
+      <div>
+        <label class="muted">Paciente (nome)</label>
+        <input id="inpPatientName" class="input" placeholder="Ex.: Maria Silva"/>
+      </div>
+      <div class="grid" style="margin-top:10px">
+        <div>
+          <label class="muted">AR (imagem)</label>
+          <input id="fileAr" type="file" accept="image/*" />
         </div>
+        <div>
+          <label class="muted">Tonometria (imagem)</label>
+          <input id="fileTono" type="file" accept="image/*" />
+        </div>
+      </div>
+      <div class="row" style="margin-top:12px">
+        <button id="btnCreate" class="btn btn-primary">Criar/Enviar</button>
+        <button id="btnClear" class="btn btn-outline">Limpar</button>
       </div>
     </div>
+
+    <!-- PACIENTES DO MÉDICO SELECIONADO -->
+    <div class="card" style="margin-top:14px">
+      <div class="section-title">Pacientes do Médico Selecionado</div>
+      <div id="patientsBox" class="muted">Nenhum paciente para este médico.</div>
+    </div>
+
   </div>
 
-  <!-- Botão “Ativar som” (requer gesto em iOS10) -->
-  <div class="sound-pill">
-    <button id="soundBtn" class="pill" title="Toque para habilitar áudio">🔊 Ativar som</button>
-  </div>
+  <!-- Firebase v8 (compat iOS10) -->
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-storage.js"></script>
 
-<script>
-(function(){
-  /* ===== Helpers ===== */
-  function $(id){ return document.getElementById(id); }
-  function clean(s){ return String(s || '').replace(/\s+/g,' ').trim(); }
-  function show(el, on){ el.style.display = on ? 'block' : 'none'; }
-  function fmtDate(ts){
-    try{
-      if (!ts) return '';
-      if (ts.toDate) return ts.toDate().toLocaleString();
-      return new Date(ts).toLocaleString();
-    }catch(e){ return ''; }
-  }
+  <script>
+  (function(){
+    var app = null, db = null, storage = null;
+    var selectedDocId = null;
+    var doctors = []; // {name,id}
+    var rootUnsub = null, listUnsub = null;
 
-  var statusEl = $('status'), appEl = $('app');
-  var okEl = $('msgOk'), errEl = $('msgErr');
-
-  var doctorNameInput = $('doctorName');
-  var doctorDocIdInput = $('doctorDocId');
-  var doctorListEl = $('doctorList');
-  var noDoctorsNoteEl = $('noDoctorsNote');
-  var btnRemoveSelected = $('btnRemoveSelected');
-  var btnToggleAdd = $('btnToggleAdd');
-  var addDoctorBox = $('addDoctorBox');
-
-  var patientNameInput = $('patientName');
-  var arInput = $('arFile'), tonoInput = $('tonoFile');
-  var btnCreate = $('btnCreate'), btnReset = $('btnReset');
-
-  var patientsBox = $('patientsBox');
-
-  // Broadcast (agregada)
-  var broadcastBar = $('broadcastBar');
-  var broadcastMsg = $('broadcastMsg');
-  var broadcastMeta = $('broadcastMeta');
-  var btnBroadcastOff = $('btnBroadcastOff');
-
-  // Avisos empilhados
-  var alertsRoot = $('alertsRoot');
-
-  // Som
-  var soundBtn = $('soundBtn');
-  var audioCtx = null;
-  var soundEnabled = false;
-
-  // LocalStorage
-  var LS_DOCTORS = 'legacy_doctors_v1';
-  var LS_SELECTED = 'legacy_selected_doctor_v1';
-
-  var doctors = [];           // [{name, docId}]
-  var selectedDoctor = null;  // {name, docId}
-  var unsubscribePatients = null;
-  var unsubscribeBroadcast = null;
-  var unsubscribeAlerts = null;
-  var alertTimer = null;
-
-  // identificador do alerta na barra (para não duplicar na lista)
-  var lastBroadcastKey = null; // "<medico>|<paciente>|<MENSAGEM>"
-
-  /* ===== Toggle de cadastro recolhível ===== */
-  btnToggleAdd.onclick = function(){
-    var open = addDoctorBox.style.display === 'block';
-    addDoctorBox.style.display = open ? 'none' : 'block';
-    btnToggleAdd.setAttribute('aria-expanded', open ? 'false' : 'true');
-  };
-
-  /* ===== Som ===== */
-  soundBtn.onclick = function(){
-    try {
-      if (!audioCtx){
-        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      }
-      if (audioCtx.state === 'suspended') { audioCtx.resume(); }
-      playBeep(200);
-      soundEnabled = true;
-      soundBtn.className = 'pill on';
-      soundBtn.textContent = '🔊 Som ativado';
-    } catch(e){
-      alert('Falha ao ativar som: ' + (e.message || e));
-    }
-  };
-
-  function playBeep(ms){
-    if (!soundEnabled || !audioCtx) return;
-    try {
-      var dur = (ms || 300) / 1000;
-      var osc = audioCtx.createOscillator();
-      var gain = audioCtx.createGain();
-      osc.type = 'sine';
-      osc.frequency.value = 880;
-      gain.gain.setValueAtTime(0.001, audioCtx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.6, audioCtx.currentTime + 0.01);
-      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
-      osc.connect(gain);
-      gain.connect(audioCtx.destination);
-      osc.start();
-      osc.stop(audioCtx.currentTime + dur + 0.02);
-    } catch(e){}
-  }
-
-  /* ===== Firebase boot ===== */
-  function loadJSON(url, cb){
+    // --------- carregar config ----------
     var xhr = new XMLHttpRequest();
-    xhr.open('GET', url, true);
+    xhr.open('GET', '/firebase-config.json', true);
     xhr.onreadystatechange = function(){
-      if (xhr.readyState === 4){
-        if (xhr.status >= 200 && xhr.status < 300){
-          try { cb(null, JSON.parse(xhr.responseText)); }
-          catch(e){ cb(e); }
-        } else { cb(new Error('HTTP '+xhr.status)); }
+      if(xhr.readyState === 4){
+        if(xhr.status >= 200 && xhr.status < 300){
+          try {
+            var cfg = JSON.parse(xhr.responseText);
+            firebase.initializeApp(cfg);
+            app = firebase.app();
+            db = firebase.firestore();
+            storage = firebase.storage();
+            firebase.auth().signInAnonymously().catch(function(){});
+            initUI();
+            loadDoctors();
+          } catch(e){ showToast('Erro ao iniciar Firebase'); }
+        } else {
+          showToast('Erro ao carregar firebase-config.json');
+        }
       }
     };
-    xhr.send();
-  }
+    xhr.send(null);
 
-  function setBusy(on){ btnCreate.disabled = !!on; btnReset.disabled  = !!on; }
-  function showErr(msg){ show(errEl, true); errEl.textContent = msg; show(okEl, false); }
-  function showOk(msg){ show(okEl, true); okEl.textContent = msg; show(errEl, false); }
+    // --------- UI helpers ----------
+    function $(id){ return document.getElementById(id); }
+    function showToast(msg){ if(window.console) console.log(msg); }
 
-  function saveDoctors(){ try { localStorage.setItem(LS_DOCTORS, JSON.stringify(doctors)); } catch(e){} }
-  function loadDoctors(){ try { var s = localStorage.getItem(LS_DOCTORS); if (s){ doctors = JSON.parse(s) || []; } } catch(e){ doctors = []; } }
-  function saveSelectedDoctor(){ try { localStorage.setItem(LS_SELECTED, JSON.stringify(selectedDoctor || null)); } catch(e){} }
-  function loadSelectedDoctor(){ try { var s = localStorage.getItem(LS_SELECTED); if (s) selectedDoctor = JSON.parse(s) || null; } catch(e){ selectedDoctor = null; } }
-
-  /* ===== Broadcast agregada ===== */
-  btnBroadcastOff.onclick = function(){
-    if (!selectedDoctor || !selectedDoctor.docId) return;
-    firebase.firestore().collection('broadcasts').doc(selectedDoctor.docId).set(
-      { active:false, updatedAt: firebase.firestore.FieldValue.serverTimestamp() },
-      { merge:true }
-    ).catch(function(e){
-      alert('Falha ao desativar: ' + (e.message || e));
-    });
-  };
-
-  function resetBroadcastUI(){
-    broadcastBar.className = 'broadcast';
-    broadcastMsg.textContent = '';
-    broadcastMeta.textContent = '';
-    broadcastBar.style.display = 'none';
-    lastBroadcastKey = null;            // zera assinatura do alerta principal
-    if (alertTimer){ clearInterval(alertTimer); alertTimer = null; }
-  }
-
-  function subscribeBroadcast(){
-    if (unsubscribeBroadcast){ try{ unsubscribeBroadcast(); }catch(e){} unsubscribeBroadcast = null; }
-    if (alertTimer){ clearInterval(alertTimer); alertTimer = null; }
-    if (!selectedDoctor || !selectedDoctor.docId){ resetBroadcastUI(); return; }
-
-    var ref = firebase.firestore().collection('broadcasts').doc(selectedDoctor.docId);
-    unsubscribeBroadcast = ref.onSnapshot(function(doc){
-      var data = doc.exists ? doc.data() : null;
-      if (data && data.active && data.message){
-        var emitterName = (data.emittedByName && String(data.emittedByName)) || (selectedDoctor ? selectedDoctor.name : '—');
-        var emitterDoc  = (data.emittedByDocId && String(data.emittedByDocId)) || (selectedDoctor ? selectedDoctor.docId : '—');
-        var patientName = (data.patientName && String(data.patientName)) || '';
-        var msgUp = String(data.message || '').toUpperCase();
-
-        // Preenche UI da barra
-        broadcastMeta.textContent = 'Alerta de: ' + emitterName + ' (' + emitterDoc + ')';
-        broadcastMsg.textContent = msgUp;
-        broadcastBar.style.display = 'block';
-        broadcastBar.className = 'broadcast pulse';
-
-        // Guarda assinatura do alerta principal para não duplicar na lista
-        lastBroadcastKey = emitterName + '|' + patientName + '|' + msgUp;
-
-        // Som
-        playBeep(280);
-        if (alertTimer){ clearInterval(alertTimer); }
-        alertTimer = setInterval(function(){ playBeep(280); }, 10000);
-      } else {
-        resetBroadcastUI();
-      }
-    }, function(err){ console.log('Broadcast error', err); });
-  }
-
-  /* ===== Avisos empilhados (subcoleção) ===== */
-  function clearAlertsUI(){
-    alertsRoot.innerHTML = '';
-    alertsRoot.className = 'alerts hidden';
-  }
-
-  function renderAlerts(snap){
-    alertsRoot.innerHTML = '';
-
-    // Dedupe por (medico + paciente + mensagem) e ignora o que está na barra
-    var seen = {};
-    var items = [];
-
-    for (var i=0;i<snap.docs.length;i++){
-      var d = snap.docs[i].data() || {};
-      if (!d.active) continue;
-
-      var medico   = d.emittedByName || 'Médico';
-      var paciente = d.patientName || d.patient || d.name || 'Paciente';
-      var msg      = String(d.message || '').toUpperCase();
-
-      var key = medico + '|' + paciente + '|' + msg;
-
-      // Se for o mesmo alerta exibido na barra, não mostrar na lista
-      if (lastBroadcastKey && key === lastBroadcastKey) continue;
-
-      if (seen[key]) continue;
-      seen[key] = true;
-
-      items.push({ medico: medico, paciente: paciente, msg: msg });
+    function saveDoctors(){
+      try{ localStorage.setItem('legacy_doctors', JSON.stringify(doctors)); }catch(e){}
     }
-
-    if (!items.length){
-      alertsRoot.className = 'alerts hidden';
-      return;
-    }
-
-    alertsRoot.className = 'alerts';
-    for (var j=0;j<items.length;j++){
-      var it = items[j];
-
-      var box = document.createElement('div');
-      box.className = 'alert-item';
-
-      var t = document.createElement('div');
-      t.className = 'alert-title';
-      t.textContent = '<' + it.medico + ':>';
-
-      var line = document.createElement('div');
-      line.className = 'alert-line';
-
-      var bPac = document.createElement('b');
-      bPac.textContent = 'Paciente ' + it.paciente;
-      line.appendChild(bPac);
-      line.appendChild(document.createTextNode(': '));
-
-      var bMsg = document.createElement('b');
-      bMsg.textContent = it.msg;
-      line.appendChild(bMsg);
-
-      box.appendChild(t);
-      box.appendChild(line);
-      alertsRoot.appendChild(box);
-    }
-  }
-
-  function subscribeAlerts(){
-    if (unsubscribeAlerts){ try{ unsubscribeAlerts(); }catch(e){} unsubscribeAlerts = null; }
-    clearAlertsUI();
-    if (!selectedDoctor || !selectedDoctor.docId) return;
-
-    var ref = firebase.firestore()
-      .collection('broadcasts').doc(selectedDoctor.docId)
-      .collection('alerts')
-      .orderBy('createdAt','desc')
-      .limit(30);
-
-    unsubscribeAlerts = ref.onSnapshot(function(snap){
-      renderAlerts(snap);
-    }, function(err){
-      console.log('Alerts error', err);
-      clearAlertsUI();
-    });
-  }
-
-  /* ===== Pacientes ===== */
-  function subscribePatientsForSelected(){
-    if (unsubscribePatients){ try{ unsubscribePatients(); }catch(e){} unsubscribePatients = null; }
-    if (!selectedDoctor || !selectedDoctor.docId){
-      renderPatients([]);
-      return;
-    }
-    var q = firebase.firestore()
-      .collection('patients')
-      .where('documentId','==', selectedDoctor.docId)
-      .where('status','==','active');
-
-    unsubscribePatients = q.onSnapshot(function(snap){
-      var arr = [];
-      for (var i=0;i<snap.docs.length;i++){
-        var d = snap.docs[i];
-        var data = d.data() || {};
-        data.id = d.id;
-        arr.push(data);
-      }
-      arr.sort(function(a,b){
-        var ta = (a.createdAt && a.createdAt.toMillis) ? a.createdAt.toMillis() : 0;
-        var tb = (b.createdAt && b.createdAt.toMillis) ? b.createdAt.toMillis() : 0;
-        return tb - ta;
-      });
-      renderPatients(arr);
-    }, function(err){
-      console.log('Erro ao listar pacientes:', err);
-      renderPatients([]);
-    });
-  }
-
-  function renderPatients(list){
-    patientsBox.innerHTML = '';
-    if (!list.length){
-      var empty = document.createElement('div');
-      empty.className = 'patient-row';
-      empty.innerHTML = '<div class="p-sub">Nenhum paciente para este médico.</div>';
-      patientsBox.appendChild(empty);
-      return;
-    }
-    for (var i=0;i<list.length;i++){
-      (function(idx){
-        var p = list[idx];
-        var row = document.createElement('div');
-        row.className = 'patient-row';
-
-        var left = document.createElement('div');
-        var title = document.createElement('div');
-        title.className = 'p-title';
-        title.textContent = p.name || 'Sem nome';
-        var sub = document.createElement('div');
-        sub.className = 'p-sub';
-        sub.textContent = 'ID: ' + (p.id || '—') + ' • Criado: ' + fmtDate(p.createdAt);
-
-        left.appendChild(title);
-        left.appendChild(sub);
-
-        var right = document.createElement('div');
-        var btnA = document.createElement('button');
-        btnA.className = 'btn red';
-        btnA.textContent = 'Arquivar';
-        btnA.onclick = function(){
-          if (!p.id) return;
-          firebase.firestore().collection('patients').doc(p.id).set(
-            { status: 'archived' },
-            { merge: true }
-          ).catch(function(e){
-            alert('Falha ao arquivar: ' + (e.message || e));
-          });
-        };
-
-        right.appendChild(btnA);
-
-        row.appendChild(left);
-        row.appendChild(right);
-        patientsBox.appendChild(row);
-      })(i);
-    }
-  }
-
-  function renderDoctors(){
-    doctorListEl.innerHTML = '';
-    if (!doctors.length){
-      show(noDoctorsNoteEl, true);
-      selectedDoctor = null;
-      saveSelectedDoctor();
-      renderPatients([]);
-      subscribeBroadcast();
-      if (unsubscribeAlerts){ try{ unsubscribeAlerts(); }catch(e){} unsubscribeAlerts=null; }
-      clearAlertsUI();
-      return;
-    }
-    show(noDoctorsNoteEl, false);
-    for (var i=0;i<doctors.length;i++){
-      (function(idx){
-        var d = doctors[idx];
-        var wrap = document.createElement('label');
-        wrap.className = 'doctor-item';
-        var isSelected = (selectedDoctor && selectedDoctor.docId === d.docId);
-        if (isSelected){ wrap.className += ' selected'; }
-
-        var radio = document.createElement('input');
-        radio.type = 'radio';
-        radio.name = 'doctorPick';
-        radio.checked = isSelected;
-        radio.onchange = function(){
-          selectedDoctor = { name: d.name, docId: d.docId };
-          saveSelectedDoctor();
-          renderDoctors();
-          subscribePatientsForSelected();
-          subscribeBroadcast();
-          subscribeAlerts();
-        };
-
-        var nm = document.createElement('span');
-        nm.className = 'name';
-        nm.textContent = d.name;
-        var dd = document.createElement('span');
-        dd.className = 'docid';
-        dd.textContent = d.docId;
-
-        wrap.appendChild(radio);
-        wrap.appendChild(nm);
-        wrap.appendChild(dd);
-        doctorListEl.appendChild(wrap);
-      })(i);
-    }
-    if (!selectedDoctor && doctors.length){
-      selectedDoctor = { name: doctors[0].name, docId: doctors[0].docId };
-      saveSelectedDoctor();
-    }
-    subscribePatientsForSelected();
-    subscribeBroadcast();
-    subscribeAlerts();
-  }
-
-  /* ===== Upload se houver arquivo ===== */
-  function uploadIfAny(file, patientId, kind, cb){
-    if (!file){ cb(null, null); return; }
-    try {
-      var ext = '.jpg';
-      var mime = file.type || 'image/jpeg';
-      if (mime.indexOf('png') >= 0) ext = '.png';
-      var path = 'exams/'+ patientId + '/' + kind + '_' + Date.now() + ext;
-      var ref = firebase.storage().ref().child(path);
-      var task = ref.put(file, { contentType: mime });
-      task.on('state_changed',
-        function(){},
-        function(err){ cb(err); },
-        function(){
-          ref.getDownloadURL().then(function(url){
-            cb(null, { url: url, path: path });
-          }).catch(function(e){ cb(e); });
-        }
-      );
-    } catch(e){
-      cb(e);
-    }
-  }
-
-  /* ===== Ações ===== */
-  $('btnAddDoctor').onclick = function(){
-    var nm = clean(doctorNameInput ? doctorNameInput.value : '');
-    var id = clean(doctorDocIdInput ? doctorDocIdInput.value : '');
-    if (!nm || !id){ return; }
-
-    var exists = false;
-    for (var i=0;i<doctors.length;i++){ if (doctors[i].docId === id){ exists = true; break; } }
-    if (!exists){
-      doctors.push({ name: nm, docId: id });
-      saveDoctors();
+    function loadDoctors(){
+      try{
+        var raw = localStorage.getItem('legacy_doctors');
+        doctors = raw ? JSON.parse(raw) : [];
+      }catch(e){ doctors = []; }
       renderDoctors();
+      // selecionar o último usado
+      var last = null; try{ last = localStorage.getItem('legacy_selected'); }catch(e){}
+      if (last) selectDoctor(last);
     }
-    if (doctorNameInput) doctorNameInput.value = '';
-    if (doctorDocIdInput) doctorDocIdInput.value = '';
-  };
 
-  btnRemoveSelected.onclick = function(){
-    if (!selectedDoctor || !selectedDoctor.docId) return;
-    var target = selectedDoctor.docId;
-    var next = [];
-    for (var i=0;i<doctors.length;i++){
-      if (doctors[i].docId !== target){ next.push(doctors[i]); }
+    function renderDoctors(){
+      var box = $('doctorList');
+      box.innerHTML = '';
+      if (!doctors.length) { box.innerHTML = '<span class="muted">Nenhum médico cadastrado.</span>'; return; }
+      for (var i=0;i<doctors.length;i++){
+        (function(d){
+          var pill = document.createElement('label');
+          pill.className = 'pill';
+          pill.setAttribute('data-selected', d.id === selectedDocId ? 'true' : 'false');
+
+          var radio = document.createElement('input');
+          radio.type = 'radio';
+          radio.name = 'doctor';
+          radio.checked = (d.id === selectedDocId);
+          radio.onchange = function(){ selectDoctor(d.id); };
+
+          var dot = document.createElement('span');
+          dot.style.width='10px'; dot.style.height='10px'; dot.style.borderRadius='999px';
+          dot.style.background='#10b981'; dot.style.display='inline-block';
+
+          var name = document.createElement('span');
+          name.textContent = ' ' + d.name + ' ';
+          var small = document.createElement('span');
+          small.className = 'muted';
+          small.textContent = d.id;
+
+          pill.appendChild(radio); pill.appendChild(dot); pill.appendChild(name); pill.appendChild(small);
+          box.appendChild(pill);
+        })(doctors[i]);
+      }
     }
-    doctors = next;
-    selectedDoctor = null;
-    saveDoctors();
-    saveSelectedDoctor();
-    renderDoctors();
-  };
 
-  btnCreate.onclick = function(){
-    show(okEl, false); show(errEl, false);
-    if (!selectedDoctor || !selectedDoctor.docId){ showErr('Selecione um médico.'); return; }
-    var name  = clean(patientNameInput.value);
-    var arF   = arInput.files[0] || null;
-    var toF   = tonoInput.files[0] || null;
-    if (!name){ showErr('Informe o nome do paciente.'); return; }
+    $('btnAddDoctor').onclick = function(){
+      var name = $('inpDocName').value.replace(/^\s+|\s+$/g,'');
+      var id   = $('inpDocId').value.replace(/^\s+|\s+$/g,'');
+      if (!name || !id) { showToast('Preencha nome e id'); return; }
+      doctors.push({name:name, id:id});
+      saveDoctors();
+      $('inpDocName').value=''; $('inpDocId').value='';
+      renderDoctors();
+      $('doctorAddBox').open = false;
+    };
 
-    setBusy(true);
-    var patientId = 'p_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2,8);
+    $('btnRemoveSelected').onclick = function(){
+      if (!selectedDocId) return;
+      for (var i=0;i<doctors.length;i++){
+        if (doctors[i].id === selectedDocId){ doctors.splice(i,1); break; }
+      }
+      saveDoctors();
+      selectedDocId = null; try{ localStorage.removeItem('legacy_selected'); }catch(e){}
+      detachBroadcastListeners();
+      renderDoctors();
+      renderAlertRoot(null); renderAlertList(null, []);
+      $('patientsBox').innerHTML = 'Nenhum paciente para este médico.';
+    };
 
-    uploadIfAny(arF, patientId, 'ar', function(err1, arRes){
-      if (err1){ setBusy(false); showErr('Falha no upload AR: '+ (err1.message || err1)); return; }
+    function selectDoctor(id){
+      selectedDocId = id;
+      try{ localStorage.setItem('legacy_selected', id); }catch(e){}
+      renderDoctors();
+      attachBroadcastListeners();
+      loadPatientsForSelected();
+    }
 
-      uploadIfAny(toF, patientId, 'tonometry', function(err2, toRes){
-        if (err2){ setBusy(false); showErr('Falha no upload Tonometria: '+ (err2.message || err2)); return; }
+    // --------- Upload paciente ----------
+    $('btnClear').onclick = function(){
+      $('inpPatientName').value=''; $('fileAr').value=''; $('fileTono').value='';
+    };
 
-        var exams = {};
-        if (arRes){ exams.ar = { uploaded: true, url: arRes.url, uploadedAt: firebase.firestore.FieldValue.serverTimestamp() }; }
-        if (toRes){ exams.tonometry = { uploaded: true, url: toRes.url, uploadedAt: firebase.firestore.FieldValue.serverTimestamp() }; }
+    $('btnCreate').onclick = function(){
+      if (!selectedDocId){ alert('Selecione o médico.'); return; }
+      var name = $('inpPatientName').value.replace(/^\s+|\s+$/g,'');
+      if (!name){ alert('Digite o nome do paciente.'); return; }
 
-        var data = {
-          id: patientId, name: name, status: 'active',
-          documentId: selectedDoctor.docId,
-          createdAt: firebase.firestore.FieldValue.serverTimestamp()
-        };
-        if (Object.keys(exams).length > 0){ data.exams = exams; }
+      var arFile = $('fileAr').files[0] || null;
+      var toFile = $('fileTono').files[0] || null;
 
-        firebase.firestore().collection('patients').doc(patientId).set(data, { merge: true })
-          .then(function(){ showOk('Paciente criado/enviado.'); patientNameInput.value=''; arInput.value=''; tonoInput.value=''; })
-          .catch(function(e){ showErr('Erro ao salvar paciente: ' + (e.message || e)); })
-          .finally(function(){ setBusy(false); });
+      var pId = 'p_'+ Math.random().toString(36).slice(2);
+      var payload = {
+        id: pId,
+        name: name,
+        status: 'active',
+        documentId: selectedDocId,
+        createdAt: new Date(),
+        exams: { ar: null, tonometry: null }
+      };
+
+      db.collection('patients').doc(pId).set(payload).then(function(){
+        var uploads = [];
+        if (arFile){
+          var arRef = storage.ref().child('exams/'+pId+'/ar_'+Date.now()+'.jpg');
+          uploads.push(arRef.put(arFile).then(function(){
+            return arRef.getDownloadURL().then(function(url){
+              return db.collection('patients').doc(pId).set({
+                exams:{ ar:{ url:url, uploaded:true, uploadedAt:new Date() } }
+              }, {merge:true});
+            });
+          }));
+        }
+        if (toFile){
+          var tRef = storage.ref().child('exams/'+pId+'/tonometry_'+Date.now()+'.jpg');
+          uploads.push(tRef.put(toFile).then(function(){
+            return tRef.getDownloadURL().then(function(url){
+              return db.collection('patients').doc(pId).set({
+                exams:{ tonometry:{ url:url, uploaded:true, uploadedAt:new Date() } }
+              }, {merge:true});
+            });
+          }));
+        }
+        return Promise.all(uploads);
+      }).then(function(){
+        $('btnClear').click();
+        loadPatientsForSelected();
+        alert('Enviado!');
+      }).catch(function(e){
+        console.error(e); alert('Falha no envio.');
       });
-    });
-  };
+    };
 
-  btnReset.onclick = function(){ patientNameInput.value=''; arInput.value=''; tonoInput.value=''; show(okEl,false); show(errEl,false); };
+    function loadPatientsForSelected(){
+      if (!selectedDocId){ $('patientsBox').innerHTML = 'Nenhum paciente para este médico.'; return; }
+      db.collection('patients').where('documentId','==',selectedDocId).where('status','==','active')
+        .orderBy('createdAt','desc').limit(50).get().then(function(snap){
+          if (snap.empty){ $('patientsBox').innerHTML = 'Nenhum paciente para este médico.'; return; }
+          var frag = document.createDocumentFragment();
+          snap.forEach(function(docu){
+            var p = docu.data();
+            var row = document.createElement('div');
+            row.className='row';
+            row.style.marginBottom='8px';
+            var name = document.createElement('div'); name.textContent = p.name;
+            var btnA = document.createElement('button');
+            btnA.className='btn btn-outline'; btnA.textContent='Arquivar';
+            btnA.onclick = function(){
+              db.collection('patients').doc(p.id).set({status:'archived'},{merge:true}).then(function(){
+                loadPatientsForSelected();
+              });
+            };
+            row.appendChild(name); row.appendChild(btnA);
+            frag.appendChild(row);
+          });
+          $('patientsBox').innerHTML=''; $('patientsBox').appendChild(frag);
+        });
+    }
 
-  /* ===== Boot ===== */
-  loadJSON('/firebase-config.json', function(err, cfg){
-    if (err){ statusEl.textContent = 'Erro ao carregar firebase-config.json'; return; }
-    try { firebase.initializeApp(cfg); } catch(e){ statusEl.textContent = 'Falha ao inicializar Firebase.'; return; }
+    // --------- ALERTAS (barra + lista) ----------
+    function detachBroadcastListeners(){
+      if (rootUnsub){ rootUnsub(); rootUnsub = null; }
+      if (listUnsub){ listUnsub(); listUnsub = null; }
+    }
 
-    firebase.auth().onAuthStateChanged(function(user){
-      if (user){
-        statusEl.style.display='none'; appEl.style.display='block';
-        addDoctorBox.style.display='none'; btnToggleAdd.setAttribute('aria-expanded','false');
+    function attachBroadcastListeners(){
+      detachBroadcastListeners();
+      if (!selectedDocId) return;
 
-        soundBtn.className = 'pill'; soundBtn.textContent = '🔊 Ativar som';
+      var rootRef = db.collection('broadcasts').doc(selectedDocId);
+      rootUnsub = rootRef.onSnapshot(function(s){
+        var data = s.exists ? s.data() : null;
+        renderAlertRoot(data);
+      });
 
-        loadDoctors(); loadSelectedDoctor(); renderDoctors();
-      } else { statusEl.textContent = 'Conectando...'; }
-    }, function(e){ statusEl.textContent='Falha na autenticação.'; console.log(e); });
+      var listRef = db.collection('broadcasts').doc(selectedDocId).collection('alerts')
+                      .where('active','==',true).orderBy('createdAt','desc');
+      listUnsub = listRef.onSnapshot(function(snap){
+        var items = [];
+        snap.forEach(function(d){ items.push(d.data()); });
+        renderAlertList(null, items); // o filtro anti-duplicação é feito dentro do render
+      });
+    }
 
-    firebase.auth().signInAnonymously().catch(function(e){ console.log('Auth anon:', e); });
-  });
-})();
-</script>
+    function renderAlertRoot(data){
+      var root = $('alert-root');
+      var text = $('alert-root-text');
+      if (data && data.active){
+        root.style.display='block';
+        var pn = data.patientName || '';
+        var msg = (data.message||'').toUpperCase();
+        var who = (data.emittedByName || 'Médico') + ' (' + (selectedDocId||'') + ')';
+
+        // duas linhas: cabeçalho + destaque do termo (COL/AVAL/OT)
+        text.innerHTML = ''
+          + '<div class="small"><span class="strong">ALERTA DE:</span> ' + escapeHtml(who) + '</div>'
+          + '<div class="strong" style="font-size:18px;margin-top:2px;">'
+          + (pn ? '<span class="strong">' + escapeHtml(pn) + '</span>' : '')
+          + (pn ? ' – ' : '')
+          + escapeHtml(msg)
+          + '</div>';
+
+        $('btnDeactivate').onclick = function(){ deactivateAlert(data); };
+        $('btnDeactivate').disabled = false;
+      } else {
+        root.style.display='none';
+        $('btnDeactivate').onclick = null;
+      }
+    }
+
+    function renderAlertList(currentRoot, items){
+      // filtra duplicados em relação ao root atual (mesmo message + patientName)
+      var rootText = $('alert-root-text').innerText || '';
+      var sigRoot = signatureFromRootText(rootText); // "MESSAGE|PATIENT"
+      var box = $('alert-list');
+      box.innerHTML='';
+
+      for (var i=0;i<items.length;i++){
+        var it = items[i];
+        var sig = (it.message||'').toUpperCase() + '|' + (it.patientName||'').toUpperCase();
+        if (sigRoot && sig === sigRoot) continue; // evita duplicar o mesmo da barra
+
+        var div = document.createElement('div');
+        div.className='alert-card';
+        // Formato solicitado:
+        // <Dr. Nome:>
+        // Paciente Nome: COL | AVAL | OT
+        var line1 = '<span class="strong">&lt;' + escapeHtml((it.emittedByName||'Médico').toLowerCase()) + ':&gt;</span>';
+        var line2 = 'Paciente <span class="strong">' + escapeHtml(it.patientName||'') + '</span>: '
+                  + '<span class="strong">' + escapeHtml((it.message||'').toUpperCase()) + '</span>';
+
+        div.innerHTML = line1 + '<br/>' + line2;
+        box.appendChild(div);
+      }
+    }
+
+    function signatureFromRootText(txt){
+      // tenta extrair MESSAGE | PATIENT do root (simples e robusto)
+      if (!txt) return '';
+      // o root imprime:  "ALERTA DE: X\nPACIENTE – MESSAGE"
+      var up = txt.toUpperCase();
+      // pega última palavra das duas linhas (não é perfeito, mas resolve)
+      // Melhor: armazenar globalmente o último root lido
+      return window.__lastRootSig || '';
+    }
+
+    function deactivateAlert(rootData){
+      if (!selectedDocId) return;
+      $('btnDeactivate').disabled = true;
+
+      var rootRef = db.collection('broadcasts').doc(selectedDocId);
+      rootRef.set({ active:false, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, {merge:true})
+        .then(function(){
+          // varrer itens que correspondam a este root (mesmo patientName + message)
+          var q = db.collection('broadcasts').doc(selectedDocId).collection('alerts')
+            .where('active','==',true)
+            .where('patientName','==', rootData.patientName || '')
+            .where('message','==', (rootData.message||'').toUpperCase());
+          return q.get().then(function(snap){
+            var batch = db.batch();
+            snap.forEach(function(docu){
+              batch.update(docu.ref, {active:false, updatedAt: firebase.firestore.FieldValue.serverTimestamp()});
+            });
+            return batch.commit();
+          });
+        })
+        .catch(function(e){ console.error(e); })
+        .then(function(){ $('btnDeactivate').disabled = false; });
+    }
+
+    function escapeHtml(s){
+      if (s==null) return '';
+      return String(s).replace(/[&<>"']/g, function(m){
+        return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[m];
+      });
+    }
+  })();
+  </script>
 </body>
 </html>
