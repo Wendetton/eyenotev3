@@ -79,7 +79,7 @@
     .alert-line b { font-weight:700; }
   </style>
 
-  <!-- Firebase v8 -->
+  <!-- Firebase v8 (iOS 10 compatível) -->
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-storage.js"></script>
@@ -99,7 +99,7 @@
         <div id="broadcastMsg" class="msg"></div>
       </div>
 
-      <!-- NOVO: lista de avisos empilhados -->
+      <!-- Lista de avisos empilhados -->
       <div id="alertsRoot" class="alerts hidden"></div>
 
       <div id="status" class="muted">Carregando...</div>
@@ -178,14 +178,14 @@
     </div>
   </div>
 
-  <!-- Botão “Ativar som” (uma vez por abertura) -->
+  <!-- Botão “Ativar som” (requer gesto em iOS10) -->
   <div class="sound-pill">
     <button id="soundBtn" class="pill" title="Toque para habilitar áudio">🔊 Ativar som</button>
   </div>
 
 <script>
 (function(){
-  // ===== Helpers =====
+  /* ===== Helpers ===== */
   function $(id){ return document.getElementById(id); }
   function clean(s){ return String(s || '').replace(/\s+/g,' ').trim(); }
   function show(el, on){ el.style.display = on ? 'block' : 'none'; }
@@ -228,6 +228,7 @@
   var audioCtx = null;
   var soundEnabled = false;
 
+  // LocalStorage
   var LS_DOCTORS = 'legacy_doctors_v1';
   var LS_SELECTED = 'legacy_selected_doctor_v1';
 
@@ -238,14 +239,17 @@
   var unsubscribeAlerts = null;
   var alertTimer = null;
 
-  // Toggle cadastro recolhível
+  // identificador do alerta na barra (para não duplicar na lista)
+  var lastBroadcastKey = null; // "<medico>|<paciente>|<MENSAGEM>"
+
+  /* ===== Toggle de cadastro recolhível ===== */
   btnToggleAdd.onclick = function(){
     var open = addDoctorBox.style.display === 'block';
     addDoctorBox.style.display = open ? 'none' : 'block';
     btnToggleAdd.setAttribute('aria-expanded', open ? 'false' : 'true');
   };
 
-  // ===== Som (iOS 10 exige gesto) =====
+  /* ===== Som ===== */
   soundBtn.onclick = function(){
     try {
       if (!audioCtx){
@@ -268,7 +272,7 @@
       var osc = audioCtx.createOscillator();
       var gain = audioCtx.createGain();
       osc.type = 'sine';
-      osc.frequency.value = 880;      // A5
+      osc.frequency.value = 880;
       gain.gain.setValueAtTime(0.001, audioCtx.currentTime);
       gain.gain.exponentialRampToValueAtTime(0.6, audioCtx.currentTime + 0.01);
       gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
@@ -279,7 +283,7 @@
     } catch(e){}
   }
 
-  // ===== Firebase boot =====
+  /* ===== Firebase boot ===== */
   function loadJSON(url, cb){
     var xhr = new XMLHttpRequest();
     xhr.open('GET', url, true);
@@ -303,7 +307,7 @@
   function saveSelectedDoctor(){ try { localStorage.setItem(LS_SELECTED, JSON.stringify(selectedDoctor || null)); } catch(e){} }
   function loadSelectedDoctor(){ try { var s = localStorage.getItem(LS_SELECTED); if (s) selectedDoctor = JSON.parse(s) || null; } catch(e){ selectedDoctor = null; } }
 
-  // ===== Broadcast agregada =====
+  /* ===== Broadcast agregada ===== */
   btnBroadcastOff.onclick = function(){
     if (!selectedDoctor || !selectedDoctor.docId) return;
     firebase.firestore().collection('broadcasts').doc(selectedDoctor.docId).set(
@@ -319,6 +323,7 @@
     broadcastMsg.textContent = '';
     broadcastMeta.textContent = '';
     broadcastBar.style.display = 'none';
+    lastBroadcastKey = null;            // zera assinatura do alerta principal
     if (alertTimer){ clearInterval(alertTimer); alertTimer = null; }
   }
 
@@ -333,13 +338,19 @@
       if (data && data.active && data.message){
         var emitterName = (data.emittedByName && String(data.emittedByName)) || (selectedDoctor ? selectedDoctor.name : '—');
         var emitterDoc  = (data.emittedByDocId && String(data.emittedByDocId)) || (selectedDoctor ? selectedDoctor.docId : '—');
+        var patientName = (data.patientName && String(data.patientName)) || '';
+        var msgUp = String(data.message || '').toUpperCase();
 
+        // Preenche UI da barra
         broadcastMeta.textContent = 'Alerta de: ' + emitterName + ' (' + emitterDoc + ')';
-        broadcastMsg.textContent = data.message;
-
+        broadcastMsg.textContent = msgUp;
         broadcastBar.style.display = 'block';
         broadcastBar.className = 'broadcast pulse';
 
+        // Guarda assinatura do alerta principal para não duplicar na lista
+        lastBroadcastKey = emitterName + '|' + patientName + '|' + msgUp;
+
+        // Som
         playBeep(280);
         if (alertTimer){ clearInterval(alertTimer); }
         alertTimer = setInterval(function(){ playBeep(280); }, 10000);
@@ -349,7 +360,7 @@
     }, function(err){ console.log('Broadcast error', err); });
   }
 
-  // ===== Avisos empilhados (subcoleção) =====
+  /* ===== Avisos empilhados (subcoleção) ===== */
   function clearAlertsUI(){
     alertsRoot.innerHTML = '';
     alertsRoot.className = 'alerts hidden';
@@ -358,7 +369,7 @@
   function renderAlerts(snap){
     alertsRoot.innerHTML = '';
 
-    // Dedupe por (medico + paciente + mensagem)
+    // Dedupe por (medico + paciente + mensagem) e ignora o que está na barra
     var seen = {};
     var items = [];
 
@@ -371,6 +382,10 @@
       var msg      = String(d.message || '').toUpperCase();
 
       var key = medico + '|' + paciente + '|' + msg;
+
+      // Se for o mesmo alerta exibido na barra, não mostrar na lista
+      if (lastBroadcastKey && key === lastBroadcastKey) continue;
+
       if (seen[key]) continue;
       seen[key] = true;
 
@@ -430,7 +445,7 @@
     });
   }
 
-  // ===== Pacientes =====
+  /* ===== Pacientes ===== */
   function subscribePatientsForSelected(){
     if (unsubscribePatients){ try{ unsubscribePatients(); }catch(e){} unsubscribePatients = null; }
     if (!selectedDoctor || !selectedDoctor.docId){
@@ -542,7 +557,7 @@
           renderDoctors();
           subscribePatientsForSelected();
           subscribeBroadcast();
-          subscribeAlerts(); // assina lista de avisos
+          subscribeAlerts();
         };
 
         var nm = document.createElement('span');
@@ -567,7 +582,7 @@
     subscribeAlerts();
   }
 
-  // Upload se houver arquivo
+  /* ===== Upload se houver arquivo ===== */
   function uploadIfAny(file, patientId, kind, cb){
     if (!file){ cb(null, null); return; }
     try {
@@ -591,7 +606,7 @@
     }
   }
 
-  // Ações
+  /* ===== Ações ===== */
   $('btnAddDoctor').onclick = function(){
     var nm = clean(doctorNameInput ? doctorNameInput.value : '');
     var id = clean(doctorDocIdInput ? doctorDocIdInput.value : '');
@@ -605,7 +620,7 @@
       renderDoctors();
     }
     if (doctorNameInput) doctorNameInput.value = '';
-       if (doctorDocIdInput) doctorDocIdInput.value = '';
+    if (doctorDocIdInput) doctorDocIdInput.value = '';
   };
 
   btnRemoveSelected.onclick = function(){
@@ -660,7 +675,7 @@
 
   btnReset.onclick = function(){ patientNameInput.value=''; arInput.value=''; tonoInput.value=''; show(okEl,false); show(errEl,false); };
 
-  // Boot
+  /* ===== Boot ===== */
   loadJSON('/firebase-config.json', function(err, cfg){
     if (err){ statusEl.textContent = 'Erro ao carregar firebase-config.json'; return; }
     try { firebase.initializeApp(cfg); } catch(e){ statusEl.textContent = 'Falha ao inicializar Firebase.'; return; }
@@ -670,7 +685,6 @@
         statusEl.style.display='none'; appEl.style.display='block';
         addDoctorBox.style.display='none'; btnToggleAdd.setAttribute('aria-expanded','false');
 
-        // Som começa desativado; toque “Ativar som” 1x
         soundBtn.className = 'pill'; soundBtn.textContent = '🔊 Ativar som';
 
         loadDoctors(); loadSelectedDoctor(); renderDoctors();
