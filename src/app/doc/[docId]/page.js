@@ -132,10 +132,9 @@ export default function DocumentPage() {
   const [showPatientForm, setShowPatientForm] = useState(false);
   const [showArchivedPatients, setShowArchivedPatients] = useState(false);
 
-  // --- refs estáveis para evitar race conditions ---
-  const currentPatientIdRef = useRef(null);   // paciente que ESTE cliente está editando/visualizando
+  // --- refs estáveis ---
+  const currentPatientIdRef = useRef(null);
   const currentPatientUnsubRef = useRef(null);
-  const rootDocUnsubRef = useRef(null);
   const presenceRef = useRef(null);
   const presenceIntervalRef = useRef(null);
   const debounceTimeoutRef = useRef(null);
@@ -144,6 +143,7 @@ export default function DocumentPage() {
   const [showAlertModal, setShowAlertModal] = useState(false);
   const [broadcastActive, setBroadcastActive] = useState(false);
   const [broadcastPatientId, setBroadcastPatientId] = useState(null);
+  const [broadcastPatientName, setBroadcastPatientName] = useState(''); // <- para a lista do médico
   const [broadcastMessage, setBroadcastMessage] = useState('');
 
   /* --------- Lista de pacientes (tempo real) --------- */
@@ -162,11 +162,9 @@ export default function DocumentPage() {
     setUserName(n); setUserColor(c);
   }, []);
 
-  /* --------- Helper: anexar listener do paciente --------- */
+  /* --------- Helper: listener do paciente --------- */
   const attachPatientListenerById = (patientId, patientName = 'Paciente Selecionado') => {
-    // encerra listener anterior
     if (currentPatientUnsubRef.current) { currentPatientUnsubRef.current(); currentPatientUnsubRef.current = null; }
-
     currentPatientIdRef.current = patientId || null;
 
     if (!docId || !patientId) {
@@ -203,13 +201,12 @@ export default function DocumentPage() {
     if (!docId || !userId || !userName || !userColor) return;
 
     const docRef = doc(db, 'documents', docId);
-    rootDocUnsubRef.current = onSnapshot(
+    const unsubRoot = onSnapshot(
       docRef,
       (snap) => {
         if (snap.exists()) {
           const data = snap.data();
 
-          // Preencher visão padrão (quando nenhum paciente local ainda foi anexado)
           if (!currentPatientIdRef.current) {
             setDocumentData({
               rightEye: data.rightEye || initialDocumentData.rightEye,
@@ -224,30 +221,22 @@ export default function DocumentPage() {
             });
           }
 
-          // ==== seguir seleção por PERFIL (com fallback compatível) ====
+          // seguir seleção por perfil (com compat)
           const perProfileId   = data?.[`selectedPatientId_${userProfile}`];
           const perProfileName = data?.[`selectedPatientName_${userProfile}`] || 'Paciente Selecionado';
 
-          // legado: só segue se origem do mesmo perfil (ou se legacy não informou perfil)
-          const legacyOk = data?.selectedByProfile
-            ? data.selectedByProfile === userProfile
-            : true;
-
-          const legacyId   = legacyOk ? data?.selectedPatientId   : null;
+          const legacyOk = data?.selectedByProfile ? data.selectedByProfile === userProfile : true;
+          const legacyId   = legacyOk ? data?.selectedPatientId : null;
           const legacyName = legacyOk ? (data?.selectedPatientName || 'Paciente Selecionado') : 'Paciente Selecionado';
 
           const selId   = (perProfileId ?? legacyId) || null;
           const selName = (perProfileName ?? legacyName) || 'Paciente Selecionado';
 
           if (selId) {
-            if (selId !== currentPatientIdRef.current) {
-              attachPatientListenerById(selId, selName);
-            }
+            if (selId !== currentPatientIdRef.current) attachPatientListenerById(selId, selName);
           } else if (!selId && currentPatientIdRef.current) {
-            // limpeza remota para ESTE perfil
             attachPatientListenerById(null);
           }
-          // ==== fim seleção ====
         } else {
           setDoc(docRef, initialDocumentData).catch(e => console.error('Erro ao criar documento raiz:', e));
           setDocumentData(initialDocumentData);
@@ -259,7 +248,6 @@ export default function DocumentPage() {
 
     // Presença
     const presenceDoc = doc(db, 'documents', docId, 'activeUsers', userId);
-    presenceRef.current = presenceDoc;
     const touchPresence = async () => {
       try {
         await setDoc(presenceDoc, { name: userName, color: userColor, lastSeen: serverTimestamp() }, { merge: true });
@@ -283,11 +271,11 @@ export default function DocumentPage() {
     });
 
     return () => {
-      rootDocUnsubRef.current && rootDocUnsubRef.current();
+      unsubRoot && unsubRoot();
       unsubUsers && unsubUsers();
       clearInterval(cleanupTimer);
       if (presenceIntervalRef.current) clearInterval(presenceIntervalRef.current);
-      if (presenceRef.current) { deleteDoc(presenceRef.current).catch(()=>{}); }
+      if (presenceRef.current) { deleteDoc(presenceDoc).catch(()=>{}); }
       if (currentPatientUnsubRef.current) { currentPatientUnsubRef.current(); currentPatientUnsubRef.current = null; }
       currentPatientIdRef.current = null;
     };
@@ -302,6 +290,7 @@ export default function DocumentPage() {
       const active = !!(data && data.active);
       setBroadcastActive(active);
       setBroadcastPatientId(data?.patientId || null);
+      setBroadcastPatientName(data?.patientName || ''); // <- nome p/ lista do médico
       setBroadcastMessage(data?.message || '');
     }, (err) => {
       console.error('Erro no listener de broadcast:', err);
@@ -454,21 +443,16 @@ export default function DocumentPage() {
   /* --------- Seleção de perfil/paciente --------- */
   const handleProfileSelect = (profile) => setUserProfile(profile);
 
-  // >>> ABRIR PACIENTE (local imediato + publish por perfil + compat) <<<
   const handlePatientSelect = async (patient) => {
-    // 1) abre local imediatamente
     attachPatientListenerById(patient?.id || null, patient?.name || 'Paciente Selecionado');
 
-    // 2) publica seleção por perfil + legado (compat)
     if (patient?.id) {
       try {
         await updateDocInFirestore({
           [`selectedPatientId_${userProfile}`]: patient.id,
           [`selectedPatientName_${userProfile}`]: patient.name || '',
-          // compat com clientes antigos:
           selectedPatientId: patient.id,
           selectedPatientName: patient.name || '',
-          // metadados:
           selectedBy: userName,
           selectedByProfile: userProfile,
           selectedAt: serverTimestamp(),
@@ -480,17 +464,13 @@ export default function DocumentPage() {
   };
 
   const handleBackToPatients = async () => {
-    // encerra listener
     attachPatientListenerById(null);
-    // limpa seleção apenas do perfil atual + legado
     try {
       await updateDocInFirestore({
         [`selectedPatientId_${userProfile}`]: null,
         [`selectedPatientName_${userProfile}`]: null,
-        // compat:
         selectedPatientId: null,
         selectedPatientName: null,
-        // metadados:
         selectedBy: null,
         selectedByProfile: null,
         selectedAt: serverTimestamp(),
@@ -693,11 +673,17 @@ export default function DocumentPage() {
                   Usuário: <span style={{ color: userColor, fontWeight: 'bold' }}>{userName}</span>
                 </p>
               </div>
-              <div className="flex space-x-3">
-                <button onClick={() => setShowArchivedPatients(true)} className="bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-2 rounded-md text-sm font-medium">
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setShowArchivedPatients(true)}
+                  className="bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-2 rounded-md text-sm font-medium"
+                >
                   Ver Arquivados
                 </button>
-                <button onClick={() => setShowPatientForm(true)} className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md font-medium">
+                <button
+                  onClick={() => setShowPatientForm(true)}
+                  className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md font-medium"
+                >
                   Criar Paciente
                 </button>
               </div>
@@ -802,7 +788,9 @@ export default function DocumentPage() {
                 <p className="text-gray-600">Documento: {docId}</p>
                 <p className="text-sm text-gray-500">Usuário: <span style={{ color: userColor, fontWeight: 'bold' }}>{userName}</span></p>
               </div>
-              <div className="flex space-x-3">
+
+              {/* Botões + indicador de aviso ativo/ausente */}
+              <div className="flex items-center gap-3">
                 <button
                   onClick={() => setShowArchivedPatients(true)}
                   className="bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-2 rounded-md text-sm font-medium"
@@ -818,6 +806,20 @@ export default function DocumentPage() {
                   </svg>
                   Atendimento Rápido
                 </button>
+
+                <span
+                  className={
+                    "inline-flex items-center px-3 py-2 rounded-full text-sm font-semibold " +
+                    (broadcastActive ? "bg-red-100 text-red-800" : "bg-gray-100 text-gray-600")
+                  }
+                  title={broadcastActive ? (broadcastMessage || '') : 'Nenhum aviso ativo'}
+                >
+                  {broadcastActive ? (
+                    <>Aviso&nbsp;<span className="font-bold">{broadcastPatientName || 'Paciente'}</span>&nbsp;ativo</>
+                  ) : (
+                    'Sem avisos ativos'
+                  )}
+                </span>
               </div>
             </div>
 
@@ -861,43 +863,39 @@ export default function DocumentPage() {
               </div>
             </div>
 
-              {/* lado direito do cabeçalho: Chamador + Avisos (alinhados por py-2) */}
-              <div className="flex items-center gap-2">
-                <CallPatientBar patient={selectedPatient} compact />
-              
-                {/* botão Aviso com mesma altura do "Chamar" (py-2) */}
-                <button
-                  type="button"
-                  onClick={() => setShowAlertModal(true)}
-                  title="Emitir aviso para o Legacy"
-                  className="inline-flex items-center px-3 py-2.5 rounded-md bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold"
-                >
-                  Aviso
-                </button>
-              
-                {broadcastActive && (
-                  <>
-                    {/* badge com padding vertical = py-2 */}
-                    <span
-                      className="inline-flex items-center px-3 py-2.5 rounded-full text-xs font-semibold bg-red-100 text-red-800 leading-none"
-                    >
-                      Aviso ativo
-                    </span>
-              
-                    {/* link "Finalizar" também com py-2 para nivelar */}
-                    <button
-                      type="button"
-                      onClick={handleFinishAlert}
-                      title="Finalizar aviso"
-                      className="inline-flex items-center py-2.5 text-red-700 hover:text-red-900 text-sm underline"
-                    >
-                      Finalizar
-                    </button>
-                  </>
-                )}
-              </div>
+            {/* lado direito do cabeçalho: Chamador + Avisos (alinhados por py-2) */}
+            <div className="flex items-center gap-2">
+              <CallPatientBar patient={selectedPatient} compact />
+
+              <button
+                type="button"
+                onClick={() => setShowAlertModal(true)}
+                title="Emitir aviso para o Legacy"
+                className="inline-flex items-center px-3 py-2 rounded-md bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold"
+              >
+                Aviso
+              </button>
+
+              {broadcastActive && (
+                <>
+                  <span
+                    className="inline-flex items-center px-3 py-2 rounded-full text-xs font-semibold bg-red-100 text-red-800 leading-none"
+                  >
+                    Aviso ativo
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleFinishAlert}
+                    title="Finalizar aviso"
+                    className="inline-flex items-center py-2 text-red-700 hover:text-red-900 text-sm underline"
+                  >
+                    Finalizar
+                  </button>
+                </>
+              )}
+            </div>
           </div>
-        </header>             
+        </header>
 
         <div className="flex flex-grow flex-col lg:flex-row gap-6">
           <main className="flex-grow lg:w-[62%]">
@@ -1039,8 +1037,6 @@ export default function DocumentPage() {
           defaultPatientName={selectedPatient?.name || ''}
           onSend={handleSendAlert}
         />
-
-        {renderArchivedModal()}
       </div>
     );
   }
