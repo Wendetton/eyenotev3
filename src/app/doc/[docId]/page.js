@@ -870,7 +870,7 @@ export default function DocumentPage() {
                   type="button"
                   onClick={() => setShowAlertModal(true)}
                   title="Emitir aviso para o Legacy"
-                  className="inline-flex items-center px-3 py-2 rounded-md bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold"
+                  className="inline-flex items-center px-3 py-1.5 rounded-md bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold"
                 >
                   Aviso
                 </button>
@@ -879,7 +879,7 @@ export default function DocumentPage() {
                   <>
                     {/* badge com padding vertical = py-2 */}
                     <span
-                      className="inline-flex items-center px-3 py-2 rounded-full text-xs font-semibold bg-red-100 text-red-800 leading-none"
+                      className="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-semibold bg-red-100 text-red-800 leading-none"
                     >
                       Aviso ativo
                     </span>
@@ -889,7 +889,7 @@ export default function DocumentPage() {
                       type="button"
                       onClick={handleFinishAlert}
                       title="Finalizar aviso"
-                      className="inline-flex items-center py-2 text-red-700 hover:text-red-900 text-sm underline"
+                      className="inline-flex items-center py-1.5 text-red-700 hover:text-red-900 text-sm underline"
                     >
                       Finalizar
                     </button>
