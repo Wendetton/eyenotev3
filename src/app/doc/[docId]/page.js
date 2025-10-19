@@ -144,7 +144,7 @@ export default function DocumentPage() {
   const [showAlertModal, setShowAlertModal] = useState(false);
   const [broadcastActive, setBroadcastActive] = useState(false);
   const [broadcastPatientId, setBroadcastPatientId] = useState(null);
-  const [broadcastPatientName, setBroadcastPatientName] = useState(''); // <- para a lista do médico
+  const [broadcastPatientName, setBroadcastPatientName] = useState('');
   const [broadcastMessage, setBroadcastMessage] = useState('');
 
   /* --------- Lista de pacientes (tempo real) --------- */
@@ -291,7 +291,7 @@ export default function DocumentPage() {
       const active = !!(data && data.active);
       setBroadcastActive(active);
       setBroadcastPatientId(data?.patientId || null);
-      setBroadcastPatientName(data?.patientName || ''); // <- nome p/ lista do médico
+      setBroadcastPatientName(data?.patientName || '');
       setBroadcastMessage(data?.message || '');
     }, (err) => {
       console.error('Erro no listener de broadcast:', err);
@@ -533,151 +533,86 @@ export default function DocumentPage() {
     }
   };
 
-// Emite aviso para o Legacy (barra + item em lista)
-const handleSendAlert = async () => {
-  if (!selectedPatient) {
-    alert('Selecione um paciente antes de emitir aviso.');
-    return;
-  }
-
-  // Texto que vai na barra/lista: "COL" | "AVAL" | "OT"
-  const msg = (pendingAlertMessage || '').trim().toUpperCase(); // se você usa os botões COL/AVAL/OT, garanta que cai aqui
-  const patientName = (pendingAlertName || selectedPatient.name || '').trim();
-  if (!msg) {
-    alert('Escolha uma mensagem (COL / AVAL / OT).');
-    return;
-  }
-
-  try {
-    const rootRef = doc(db, 'broadcasts', docId);
-    const alertsCol = collection(db, 'broadcasts', docId, 'alerts');
-    const alertRef = doc(alertsCol); // id aleatório
-
-    // payload padrão
-    const payload = {
-      message: msg,                  // "COL" | "AVAL" | "OT"
-      patientName,                   // <- **ESSENCIAL** para a barra mostrar o nome e para a deduplicação
-      emittedByDocId: docId,
-      emittedByName: userName || 'Médico',
-      active: true,
-      createdAt: serverTimestamp()
-    };
-
-    // 1) Atualiza a BARRA (doc raiz) com o MESMO conteúdo
-    await setDoc(
-      rootRef,
-      {
-        active: true,
-        message: payload.message,
-        patientName: payload.patientName,           // <- **gravado no raiz**
-        emittedByDocId: payload.emittedByDocId,
-        emittedByName: payload.emittedByName,
-        updatedAt: serverTimestamp()
-      },
-      { merge: true }
-    );
-
-    // 2) Cria item na LISTA (subcoleção)
-    await setDoc(alertRef, payload);
-
-    // fecha modal/limpa campos locais se você usa
-    setShowAlertModal(false);
-    setPendingAlertMessage('');
-  } catch (err) {
-    console.error('Erro ao emitir aviso:', err);
-    alert('Falha ao emitir aviso.');
-  }
-};
-
-
-    const normalized = (message || '')
-      .toUpperCase()
-      .replace(/\s+/g, ' ')
-      .trim();
-
-    const color = '#ef4444';
-
-    // Doc agregado (compat)
-    await setDoc(
-      doc(db, 'broadcasts', docId),
-      {
-        active: true,
-        message: normalized,
-        color,
-        emittedByName: userName || 'Médico',
-        emittedByDocId: docId,
-        patientId: selectedPatient.id,
-        patientName: (patientName || selectedPatient.name || '').trim(),
-        startedAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
-      },
-      { merge: true }
-    );
-
-    // Item individual (suporte a múltiplos avisos)
-    const alertsCol = collection(db, 'broadcasts', docId, 'alerts');
-    await addDoc(alertsCol, {
-      active: true,
-      message: normalized,
-      color,
-      emittedByName: userName || 'Médico',
-      emittedByDocId: docId,
-      patientId: selectedPatient.id,
-      patientName: (patientName || selectedPatient.name || '').trim(),
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp()
-    });
-
-    setShowAlertModal(false);
-  } catch (e) {
-    console.error('Erro ao enviar aviso:', e);
-    alert('Falha ao enviar aviso.');
-  }
-};
-
-
-const handleFinishAlert = async () => {
-  try {
-    if (!docId || !selectedPatient) {
-      alert('Nenhum paciente selecionado.');
+  /* --------- AVISOS (Legacy) --------- */
+  // Aceita parâmetros vindos do Modal ou usa estados locais de fallback
+  const handleSendAlert = async (nameArg, messageArg) => {
+    if (!selectedPatient) {
+      alert('Selecione um paciente antes de emitir aviso.');
       return;
     }
 
-    // 1) Desliga a barra agregada
-    await setDoc(
-      doc(db, 'broadcasts', docId),
-      { active: false, updatedAt: serverTimestamp() },
-      { merge: true }
-    );
+    const msg = (messageArg || broadcastMessage || '').trim().toUpperCase();
+    const patientName = (nameArg || broadcastPatientName || selectedPatient.name || '').trim();
 
-    // 2) Desativa todos os avisos ativos deste paciente na subcoleção
-    const alertsCol = collection(db, 'broadcasts', docId, 'alerts');
-    const q = query(
-      alertsCol,
-      where('active', '==', true),
-      where('patientId', '==', selectedPatient.id)
-    );
-    const snap = await getDocs(q);
+    if (!msg) {
+      alert('Escolha uma mensagem (COL / AVAL / OT).');
+      return;
+    }
 
-    const promises = [];
-    snap.forEach((d) => {
-      promises.push(
-        updateDoc(d.ref, {
-          active: false,
-          updatedAt: serverTimestamp(),
-        })
+    try {
+      // 1) Atualiza a barra (doc raiz) com TODOS os campos necessários
+      await setDoc(
+        doc(db, 'broadcasts', docId),
+        {
+          active: true,
+          message: msg,
+          patientName,
+          emittedByDocId: docId,
+          emittedByName: userName || 'Médico',
+          patientId: selectedPatient.id,
+          updatedAt: serverTimestamp()
+        },
+        { merge: true }
       );
-    });
-    await Promise.all(promises);
 
-    // Fechar modal, se houver
-    if (typeof setShowAlertModal === 'function') setShowAlertModal(false);
-  } catch (e) {
-    console.error('Erro ao finalizar aviso:', e);
-    alert('Falha ao finalizar aviso.');
-  }
-};
+      // 2) Adiciona um item na subcoleção (suporte a múltiplos avisos)
+      await addDoc(collection(db, 'broadcasts', docId, 'alerts'), {
+        active: true,
+        message: msg,
+        patientName,
+        emittedByDocId: docId,
+        emittedByName: userName || 'Médico',
+        patientId: selectedPatient.id,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
 
+      setShowAlertModal(false);
+      setBroadcastMessage('');
+      setBroadcastPatientName('');
+    } catch (e) {
+      console.error('Erro ao enviar aviso:', e);
+      alert('Falha ao enviar aviso.');
+    }
+  };
+
+  const handleFinishAlert = async () => {
+    try {
+      // Desliga a barra agregada
+      await setDoc(
+        doc(db, 'broadcasts', docId),
+        { active: false, updatedAt: serverTimestamp() },
+        { merge: true }
+      );
+
+      // Desativa todos os avisos ativos deste paciente na subcoleção
+      const alertsCol = collection(db, 'broadcasts', docId, 'alerts');
+      const q = query(
+        alertsCol,
+        where('active', '==', true),
+        where('patientId', '==', selectedPatient?.id || '')
+      );
+      const snap = await getDocs(q);
+      await Promise.all(
+        snap.docs.map(d => updateDoc(d.ref, { active: false, updatedAt: serverTimestamp() }))
+      );
+
+      setShowAlertModal(false);
+    } catch (e) {
+      console.error('Erro ao finalizar aviso:', e);
+      alert('Falha ao finalizar aviso.');
+    }
+  };
 
   const renderArchivedModal = () =>
     showArchivedPatients ? <ArchivedPatients documentId={docId} onClose={() => setShowArchivedPatients(false)} /> : null;
@@ -1138,7 +1073,7 @@ const handleFinishAlert = async () => {
           isOpen={showAlertModal}
           onClose={() => setShowAlertModal(false)}
           defaultPatientName={selectedPatient?.name || ''}
-          onSend={handleSendAlert}
+          onSend={({ patientName, message } = {}) => handleSendAlert(patientName, message)}
         />
       </div>
     );
