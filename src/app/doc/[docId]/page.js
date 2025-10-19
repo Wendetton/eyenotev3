@@ -587,19 +587,48 @@ const handleSendAlert = async ({ patientName, message }) => {
 };
 
 
-  const handleFinishAlert = async () => {
-    try {
-      if (!docId) return;
-      await setDoc(
-        doc(db, 'broadcasts', docId),
-        { active: false, updatedAt: serverTimestamp(), endedAt: serverTimestamp() },
-        { merge: true }
-      );
-    } catch (e) {
-      console.error('Erro ao finalizar aviso:', e);
-      alert('Falha ao finalizar aviso.');
+const handleFinishAlert = async () => {
+  try {
+    if (!docId || !selectedPatient) {
+      alert('Nenhum paciente selecionado.');
+      return;
     }
-  };
+
+    // 1) Desliga a barra agregada
+    await setDoc(
+      doc(db, 'broadcasts', docId),
+      { active: false, updatedAt: serverTimestamp() },
+      { merge: true }
+    );
+
+    // 2) Desativa todos os avisos ativos deste paciente na subcoleção
+    const alertsCol = collection(db, 'broadcasts', docId, 'alerts');
+    const q = query(
+      alertsCol,
+      where('active', '==', true),
+      where('patientId', '==', selectedPatient.id)
+    );
+    const snap = await getDocs(q);
+
+    const promises = [];
+    snap.forEach((d) => {
+      promises.push(
+        updateDoc(d.ref, {
+          active: false,
+          updatedAt: serverTimestamp(),
+        })
+      );
+    });
+    await Promise.all(promises);
+
+    // Fechar modal, se houver
+    if (typeof setShowAlertModal === 'function') setShowAlertModal(false);
+  } catch (e) {
+    console.error('Erro ao finalizar aviso:', e);
+    alert('Falha ao finalizar aviso.');
+  }
+};
+
 
   const renderArchivedModal = () =>
     showArchivedPatients ? <ArchivedPatients documentId={docId} onClose={() => setShowArchivedPatients(false)} /> : null;
