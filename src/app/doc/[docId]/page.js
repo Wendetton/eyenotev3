@@ -541,15 +541,14 @@ const handleSendAlert = async ({ patientName, message }) => {
       return;
     }
 
-    // Normaliza a mensagem para códigos curtos MAIÚSCULOS (ex.: "COL | AVAL | OT")
     const normalized = (message || '')
       .toUpperCase()
       .replace(/\s+/g, ' ')
       .trim();
 
-    const color = '#ef4444'; // vermelho (para manter compatibilidade visual)
+    const color = '#ef4444';
 
-    // 1) Mantém o doc agregado (compat com a barra antiga, se você ainda usar)
+    // Doc agregado (compat)
     await setDoc(
       doc(db, 'broadcasts', docId),
       {
@@ -560,13 +559,13 @@ const handleSendAlert = async ({ patientName, message }) => {
         emittedByDocId: docId,
         patientId: selectedPatient.id,
         patientName: (patientName || selectedPatient.name || '').trim(),
-        updatedAt: serverTimestamp(),
-        startedAt: serverTimestamp()
+        startedAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
       },
       { merge: true }
     );
 
-    // 2) **Novo**: cria um registro individual para suportar **vários avisos simultâneos**
+    // Item individual (suporte a múltiplos avisos)
     const alertsCol = collection(db, 'broadcasts', docId, 'alerts');
     await addDoc(alertsCol, {
       active: true,
@@ -580,13 +579,13 @@ const handleSendAlert = async ({ patientName, message }) => {
       updatedAt: serverTimestamp()
     });
 
-    // fecha o modal de aviso (se estiver aberto)
     setShowAlertModal(false);
   } catch (e) {
     console.error('Erro ao enviar aviso:', e);
     alert('Falha ao enviar aviso.');
   }
 };
+
 
   const handleFinishAlert = async () => {
     try {
