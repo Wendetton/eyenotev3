@@ -861,33 +861,42 @@ export default function DocumentPage() {
               </div>
             </div>
 
-            {/* lado direito do cabeçalho: Chamador + Avisos */}
-            <div className="flex items-center gap-2">
-              <CallPatientBar patient={selectedPatient} compact />
-
-              <button
-                onClick={() => setShowAlertModal(true)}
-                className="bg-orange-500 hover:bg-orange-600 text-white px-3 py-2 rounded-md text-sm font-semibold"
-                title="Emitir aviso para o Legacy"
-              >
-                Aviso
-              </button>
-
-              {broadcastActive && (
-                <>
-                  <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-800">
-                    Aviso ativo
-                  </span>
-                  <button
-                    onClick={handleFinishAlert}
-                    className="text-red-700 hover:text-red-900 text-sm underline"
-                    title="Finalizar aviso"
-                  >
-                    Finalizar
-                  </button>
-                </>
-              )}
-            </div>
+              {/* lado direito do cabeçalho: Chamador + Avisos (alinhados) */}
+              <div className="flex items-center gap-2">
+                {/* envolve o chamador numa “faixa” de 40px de altura */}
+                <div className="flex items-center h-10">
+                  <CallPatientBar patient={selectedPatient} compact />
+                </div>
+              
+                {/* botão Aviso com 40px de altura */}
+                <button
+                  type="button"
+                  onClick={() => setShowAlertModal(true)}
+                  title="Emitir aviso para o Legacy"
+                  className="inline-flex h-10 items-center px-3 rounded-md bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold"
+                >
+                  Aviso
+                </button>
+              
+                {/* badge + link com a MESMA altura (40px) */}
+                {broadcastActive && (
+                  <>
+                    <span
+                      className="inline-flex h-10 items-center px-3 rounded-full text-xs font-semibold bg-red-100 text-red-800 leading-none"
+                    >
+                      Aviso ativo
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleFinishAlert}
+                      title="Finalizar aviso"
+                      className="inline-flex h-10 items-center text-red-700 hover:text-red-900 text-sm underline"
+                    >
+                      Finalizar
+                    </button>
+                  </>
+                )}
+              </div>
           </div>
         </header>             
 
