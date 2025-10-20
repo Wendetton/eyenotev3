@@ -532,35 +532,38 @@ export default function DocumentPage() {
     }
   };
 
-  /* --------- Avisos: enviar / finalizar --------- */
-  const handleSendAlert = async ({ patientName, message }) => {
-    try {
-      if (!docId) return;
-      if (!selectedPatient) {
-        alert('Nenhum paciente selecionado.');
-        return;
-      }
-      const color = '#ef4444'; // vermelho
-      await setDoc(
-        doc(db, 'broadcasts', docId),
-        {
-          active: true,
-          message: (message || '').trim(),
-          color,
-          emittedByName: userName || 'Médico',
-          emittedByDocId: docId,
-          patientId: selectedPatient.id,
-          patientName: (patientName || selectedPatient.name || '').trim(),
-          updatedAt: serverTimestamp(),
-          startedAt: serverTimestamp()
-        },
-        { merge: true }
-      );
-    } catch (e) {
-      console.error('Erro ao enviar aviso:', e);
-      alert('Falha ao enviar aviso.');
+const handleSendAlert = async ({ patientName, message }) => {
+  try {
+    if (!docId) return;
+    if (!selectedPatient) {
+      alert('Nenhum paciente selecionado.');
+      return;
     }
-  };
+    const color = '#ef4444'; // vermelho
+    
+    // CORREÇÃO: usar patientName do parâmetro (vem do modal)
+    const finalPatientName = (patientName || selectedPatient.name || '').trim();
+    
+    await setDoc(
+      doc(db, 'broadcasts', docId),
+      {
+        active: true,
+        message: (message || '').trim(),
+        color,
+        emittedByName: userName || 'Médico',
+        emittedByDocId: docId,
+        patientId: selectedPatient.id,
+        patientName: finalPatientName, // <- CORREÇÃO AQUI
+        updatedAt: serverTimestamp(),
+        startedAt: serverTimestamp()
+      },
+      { merge: true }
+    );
+  } catch (e) {
+    console.error('Erro ao enviar aviso:', e);
+    alert('Falha ao enviar aviso.');
+  }
+};
 
   const handleFinishAlert = async () => {
     try {
