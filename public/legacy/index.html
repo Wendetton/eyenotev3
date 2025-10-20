@@ -306,34 +306,36 @@
     if (alertTimer){ clearInterval(alertTimer); alertTimer = null; }
   }
 
-  function subscribeBroadcast(){
-    if (unsubscribeBroadcast){ try{ unsubscribeBroadcast(); }catch(e){} unsubscribeBroadcast = null; }
-    if (alertTimer){ clearInterval(alertTimer); alertTimer = null; }
-    if (!selectedDoctor || !selectedDoctor.docId){ resetBroadcastUI(); return; }
+function subscribeBroadcast(){
+  if (unsubscribeBroadcast){ try{ unsubscribeBroadcast(); }catch(e){} unsubscribeBroadcast = null; }
+  if (alertTimer){ clearInterval(alertTimer); alertTimer = null; }
+  if (!selectedDoctor || !selectedDoctor.docId){ resetBroadcastUI(); return; }
 
-    var ref = firebase.firestore().collection('broadcasts').doc(selectedDoctor.docId);
-    unsubscribeBroadcast = ref.onSnapshot(function(doc){
-      var data = doc.exists ? doc.data() : null;
-      if (data && data.active && data.message){
-        // Rastreio do emissor — se o painel do médico enviar esses campos, usamos;
-        // senão, caímos no fallback do médico selecionado no iPad.
-        var emitterName = (data.emittedByName && String(data.emittedByName)) || (selectedDoctor ? selectedDoctor.name : '—');
-        var emitterDoc  = (data.emittedByDocId && String(data.emittedByDocId)) || (selectedDoctor ? selectedDoctor.docId : '—');
+  var ref = firebase.firestore().collection('broadcasts').doc(selectedDoctor.docId);
+  unsubscribeBroadcast = ref.onSnapshot(function(doc){
+    var data = doc.exists ? doc.data() : null;
+    if (data && data.active && data.message){
+      // CORREÇÃO: buscar patientName primeiro, depois fallback
+      var patientName = (data.patientName && String(data.patientName).trim()) || 'Paciente';
+      
+      // Rastreio do emissor
+      var emitterName = (data.emittedByName && String(data.emittedByName)) || (selectedDoctor ? selectedDoctor.name : '—');
+      var emitterDoc  = (data.emittedByDocId && String(data.emittedByDocId)) || (selectedDoctor ? selectedDoctor.docId : '—');
 
-        broadcastMeta.textContent = 'Alerta de: ' + emitterName + ' (' + emitterDoc + ')';
-        broadcastMsg.textContent = data.message;
+      broadcastMeta.textContent = 'Alerta de: ' + emitterName + ' (' + emitterDoc + ') - Paciente: ' + patientName;
+      broadcastMsg.textContent = data.message;
 
-        broadcastBar.style.display = 'block';
-        broadcastBar.className = 'broadcast pulse';
+      broadcastBar.style.display = 'block';
+      broadcastBar.className = 'broadcast pulse';
 
-        playBeep(280);
-        if (alertTimer){ clearInterval(alertTimer); }
-        alertTimer = setInterval(function(){ playBeep(280); }, 10000);
-      } else {
-        resetBroadcastUI();
-      }
-    }, function(err){ console.log('Broadcast error', err); });
-  }
+      playBeep(280);
+      if (alertTimer){ clearInterval(alertTimer); }
+      alertTimer = setInterval(function(){ playBeep(280); }, 10000);
+    } else {
+      resetBroadcastUI();
+    }
+  }, function(err){ console.log('Broadcast error', err); });
+}
 
   // ===== Pacientes =====
   function subscribePatientsForSelected(){
