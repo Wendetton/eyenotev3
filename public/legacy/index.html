@@ -44,73 +44,101 @@
     .toggler .caret { transition: transform .15s linear; }
     .toggler[aria-expanded="true"] .caret { transform: rotate(90deg); }
 
-    /* ===== Barra de transmissão (vermelha) ===== */
-        .broadcast {
-          display: none;
-          color: #fff;
-          background: #ef4444; /* vermelho */
-          padding: 16px 20px;
-          font-weight: 800;
-          text-transform: uppercase;
-          letter-spacing: .5px;
-          text-align: left;
-          border: 2px solid #b91c1c;
-          border-radius: 8px;
-          margin: 10px 0 12px 0;
-        }
-        .broadcast.pulse { animation: pulseFlash 1s linear infinite; }
-        @keyframes pulseFlash { 0%,100%{filter:brightness(1);} 50%{filter:brightness(1.35);} }
-        
-        .broadcast .topline { 
-          display:flex; 
-          align-items:center; 
-          justify-content:space-between; 
-          gap:10px; 
-          font-size: 11px;
-          font-weight: 500;
-          text-transform: none;
-          letter-spacing: 0;
-          opacity: 0.85;
-          margin-bottom: 12px;
-        }
-        
-        .broadcast .patient-name {
-          display: block;
-          font-size: 32px;
-          font-weight: 900;
-          text-transform: uppercase;
-          letter-spacing: 1px;
-          margin-bottom: 8px;
-          text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
-        }
-        
-        .broadcast .msg { 
-          display:block; 
-          font-size: 24px;
-          font-weight: 700;
-          text-transform: none;
-          letter-spacing: 0.5px;
-          line-height: 1.4;
-          margin-top: 0;
-        }
-        
-        .broadcast .mini { 
-          background:#fff; 
-          color:#b91c1c; 
-          border:1px solid #fecaca; 
-          font-weight:700; 
-          padding:6px 12px; 
-          border-radius:8px;
-          font-size: 11px;
-          text-transform: uppercase;
-          cursor: pointer;
-          transition: all 0.2s;
-        }
-        
-        .broadcast .mini:hover {
-          background: #fee2e2;
-          transform: scale(1.05);
-        }
+          /* ===== Container de broadcasts ===== */
+      .broadcasts-container {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        margin: 10px 0 12px 0;
+      }
+      
+      /* ===== Barra de transmissão (vermelha) ===== */
+      .broadcast {
+        color: #fff;
+        background: #ef4444; /* vermelho */
+        padding: 16px 20px;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: .5px;
+        text-align: left;
+        border: 2px solid #b91c1c;
+        border-radius: 8px;
+        position: relative;
+      }
+      .broadcast.pulse { animation: pulseFlash 1s linear infinite; }
+      @keyframes pulseFlash { 0%,100%{filter:brightness(1);} 50%{filter:brightness(1.35);} }
+      
+      .broadcast .topline { 
+        display:flex; 
+        align-items:center; 
+        justify-content:space-between; 
+        gap:10px; 
+        font-size: 11px;
+        font-weight: 500;
+        text-transform: none;
+        letter-spacing: 0;
+        opacity: 0.85;
+        margin-bottom: 12px;
+      }
+      
+      .broadcast .patient-name {
+        display: block;
+        font-size: 32px;
+        font-weight: 900;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        margin-bottom: 8px;
+        text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+      }
+      
+      .broadcast .msg { 
+        display:block; 
+        font-size: 24px;
+        font-weight: 700;
+        text-transform: none;
+        letter-spacing: 0.5px;
+        line-height: 1.4;
+        margin-top: 0;
+      }
+      
+      .broadcast .mini { 
+        background:#fff; 
+        color:#b91c1c; 
+        border:1px solid #fecaca; 
+        font-weight:700; 
+        padding:6px 12px; 
+        border-radius:8px;
+        font-size: 11px;
+        text-transform: uppercase;
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+      
+      .broadcast .mini:hover {
+        background: #fee2e2;
+        transform: scale(1.05);
+      }
+      
+      .broadcast-badge {
+        position: absolute;
+        top: 12px;
+        left: 12px;
+        background: rgba(0,0,0,0.3);
+        color: #fff;
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+      }
+      
+      .no-broadcasts {
+        display: none;
+        color: #6b7280;
+        font-size: 14px;
+        text-align: center;
+        padding: 20px;
+      }
     
     /* Botão som */
     .sound-pill { position: fixed; right: 10px; bottom: 10px; z-index: 10000; }
@@ -127,17 +155,11 @@
 <body>
   <div class="wrap">
     <div class="card">
-      <h1>EyeNote – Uploader Legacy</h1>
+      <h1>EyeNote – Uploader Legacy Oftalmocenter</h1>
 
-<!-- Barra de transmissão abaixo do título -->
-<div id="broadcastBar" class="broadcast">
-  <div class="topline">
-    <div id="broadcastMeta">—</div>
-    <button id="btnBroadcastOff" class="mini" title="Desativar alerta para todos">Desativar alerta</button>
-  </div>
-  <div id="broadcastPatient" class="patient-name"></div>
-  <div id="broadcastMsg" class="msg"></div>
-</div>
+<!-- Container de broadcasts abaixo do título -->
+<div id="broadcastsContainer" class="broadcasts-container"></div>
+<div id="noBroadcasts" class="no-broadcasts">Nenhum alerta ativo no momento.</div>
 
       <div id="status" class="muted">Carregando...</div>
       <div id="app" style="display:none">
@@ -251,12 +273,6 @@
 
   var patientsBox = $('patientsBox');
 
-  // Broadcast DOM
-  var broadcastBar = $('broadcastBar');
-  var broadcastMsg = $('broadcastMsg');
-  var broadcastMeta = $('broadcastMeta');
-  var btnBroadcastOff = $('btnBroadcastOff');
-
   // Som
   var soundBtn = $('soundBtn');
   var audioCtx = null;
@@ -268,8 +284,6 @@
   var doctors = []; // [{name, docId}]
   var selectedDoctor = null; // {name, docId}
   var unsubscribePatients = null;
-  var unsubscribeBroadcast = null;
-  var alertTimer = null;
 
   // Toggle cadastro recolhível
   btnToggleAdd.onclick = function(){
@@ -336,63 +350,163 @@
   function saveSelectedDoctor(){ try { localStorage.setItem(LS_SELECTED, JSON.stringify(selectedDoctor || null)); } catch(e){} }
   function loadSelectedDoctor(){ try { var s = localStorage.getItem(LS_SELECTED); if (s) selectedDoctor = JSON.parse(s) || null; } catch(e){ selectedDoctor = null; } }
 
-  // ===== Broadcast =====
-  btnBroadcastOff.onclick = function(){
-    if (!selectedDoctor || !selectedDoctor.docId) return;
-    firebase.firestore().collection('broadcasts').doc(selectedDoctor.docId).set(
-      { active:false, updatedAt: firebase.firestore.FieldValue.serverTimestamp() },
-      { merge:true }
-    ).catch(function(e){
-      alert('Falha ao desativar: ' + (e.message || e));
-    });
-  };
+// ===== Broadcasts (múltiplos alertas) =====
+var broadcastsContainer = $('broadcastsContainer');
+var noBroadcasts = $('noBroadcasts');
+var activeBroadcasts = {}; // { docId: { timer, element, data } }
+var unsubscribeBroadcasts = {}; // { docId: unsubscribe }
 
-function resetBroadcastUI(){
-  broadcastBar.className = 'broadcast';
-  broadcastMsg.textContent = '';
-  broadcastMeta.textContent = '';
-  var broadcastPatient = document.getElementById('broadcastPatient');
-  if (broadcastPatient) broadcastPatient.textContent = '';
-  broadcastBar.style.display = 'none';
-  if (alertTimer){ clearInterval(alertTimer); alertTimer = null; }
+function createBroadcastElement(docId, data) {
+  var wrapper = document.createElement('div');
+  wrapper.className = 'broadcast pulse';
+  wrapper.id = 'broadcast_' + docId;
+  
+  var badge = document.createElement('div');
+  badge.className = 'broadcast-badge';
+  badge.textContent = 'Doc: ' + docId;
+  
+  var topline = document.createElement('div');
+  topline.className = 'topline';
+  
+  var meta = document.createElement('div');
+  var emitterName = (data.emittedByName && String(data.emittedByName)) || '—';
+  var emitterDoc = (data.emittedByDocId && String(data.emittedByDocId)) || docId;
+  meta.textContent = 'Alerta de: ' + emitterName + ' (' + emitterDoc + ')';
+  
+  var btnOff = document.createElement('button');
+  btnOff.className = 'mini';
+  btnOff.textContent = 'Desativar alerta';
+  btnOff.title = 'Desativar este alerta';
+  btnOff.onclick = function() {
+    deactivateBroadcast(docId);
+  };
+  
+  topline.appendChild(meta);
+  topline.appendChild(btnOff);
+  
+  var patientName = document.createElement('div');
+  patientName.className = 'patient-name';
+  patientName.textContent = (data.patientName && String(data.patientName).trim()) || 'Paciente';
+  
+  var msg = document.createElement('div');
+  msg.className = 'msg';
+  msg.textContent = data.message || '';
+  
+  wrapper.appendChild(badge);
+  wrapper.appendChild(topline);
+  wrapper.appendChild(patientName);
+  wrapper.appendChild(msg);
+  
+  return wrapper;
 }
 
-function subscribeBroadcast(){
-  if (unsubscribeBroadcast){ try{ unsubscribeBroadcast(); }catch(e){} unsubscribeBroadcast = null; }
-  if (alertTimer){ clearInterval(alertTimer); alertTimer = null; }
-  if (!selectedDoctor || !selectedDoctor.docId){ resetBroadcastUI(); return; }
+function deactivateBroadcast(docId) {
+  firebase.firestore().collection('broadcasts').doc(docId).set(
+    { active: false, updatedAt: firebase.firestore.FieldValue.serverTimestamp() },
+    { merge: true }
+  ).catch(function(e) {
+    alert('Falha ao desativar: ' + (e.message || e));
+  });
+}
 
-  var ref = firebase.firestore().collection('broadcasts').doc(selectedDoctor.docId);
-  unsubscribeBroadcast = ref.onSnapshot(function(doc){
-    var data = doc.exists ? doc.data() : null;
-    if (data && data.active && data.message){
-      // Nome do paciente
-      var patientName = (data.patientName && String(data.patientName).trim()) || 'Paciente';
-      
-      // Rastreio do emissor
-      var emitterName = (data.emittedByName && String(data.emittedByName)) || (selectedDoctor ? selectedDoctor.name : '—');
-      var emitterDoc  = (data.emittedByDocId && String(data.emittedByDocId)) || (selectedDoctor ? selectedDoctor.docId : '—');
-
-      broadcastMeta.textContent = 'Alerta de: ' + emitterName + ' (' + emitterDoc + ')';
-      
-      // Atualizar nome do paciente (novo elemento)
-      var broadcastPatient = document.getElementById('broadcastPatient');
-      if (broadcastPatient) {
-        broadcastPatient.textContent = patientName;
-      }
-      
-      broadcastMsg.textContent = data.message;
-
-      broadcastBar.style.display = 'block';
-      broadcastBar.className = 'broadcast pulse';
-
-      playBeep(280);
-      if (alertTimer){ clearInterval(alertTimer); }
-      alertTimer = setInterval(function(){ playBeep(280); }, 10000);
-    } else {
-      resetBroadcastUI();
+function renderBroadcasts() {
+  broadcastsContainer.innerHTML = '';
+  var activeCount = 0;
+  
+  for (var docId in activeBroadcasts) {
+    if (activeBroadcasts[docId] && activeBroadcasts[docId].element) {
+      broadcastsContainer.appendChild(activeBroadcasts[docId].element);
+      activeCount++;
     }
-  }, function(err){ console.log('Broadcast error', err); });
+  }
+  
+  if (activeCount === 0) {
+    noBroadcasts.style.display = 'block';
+  } else {
+    noBroadcasts.style.display = 'none';
+  }
+}
+
+function addOrUpdateBroadcast(docId, data) {
+  // Remover broadcast anterior se existir
+  if (activeBroadcasts[docId]) {
+    if (activeBroadcasts[docId].timer) {
+      clearInterval(activeBroadcasts[docId].timer);
+    }
+  }
+  
+  // Criar novo elemento
+  var element = createBroadcastElement(docId, data);
+  
+  // Tocar som
+  playBeep(280);
+  
+  // Configurar timer para tocar a cada 10s
+  var timer = setInterval(function() {
+    playBeep(280);
+  }, 10000);
+  
+  // Armazenar
+  activeBroadcasts[docId] = {
+    element: element,
+    timer: timer,
+    data: data
+  };
+  
+  renderBroadcasts();
+}
+
+function removeBroadcast(docId) {
+  if (activeBroadcasts[docId]) {
+    if (activeBroadcasts[docId].timer) {
+      clearInterval(activeBroadcasts[docId].timer);
+    }
+    delete activeBroadcasts[docId];
+    renderBroadcasts();
+  }
+}
+
+function subscribeToBroadcast(docId) {
+  if (unsubscribeBroadcasts[docId]) {
+    try { unsubscribeBroadcasts[docId](); } catch(e) {}
+  }
+  
+  var ref = firebase.firestore().collection('broadcasts').doc(docId);
+  var unsub = ref.onSnapshot(function(doc) {
+    var data = doc.exists ? doc.data() : null;
+    
+    if (data && data.active && data.message) {
+      addOrUpdateBroadcast(docId, data);
+    } else {
+      removeBroadcast(docId);
+    }
+  }, function(err) {
+    console.log('Broadcast error for ' + docId + ':', err);
+  });
+  
+  unsubscribeBroadcasts[docId] = unsub;
+}
+
+function subscribeToAllDoctorBroadcasts() {
+  // Limpar listeners anteriores
+  for (var docId in unsubscribeBroadcasts) {
+    try { unsubscribeBroadcasts[docId](); } catch(e) {}
+  }
+  unsubscribeBroadcasts = {};
+  
+  // Limpar broadcasts ativos
+  for (var docId in activeBroadcasts) {
+    if (activeBroadcasts[docId].timer) {
+      clearInterval(activeBroadcasts[docId].timer);
+    }
+  }
+  activeBroadcasts = {};
+  renderBroadcasts();
+  
+  // Inscrever em todos os médicos cadastrados
+  for (var i = 0; i < doctors.length; i++) {
+    subscribeToBroadcast(doctors[i].docId);
+  }
 }
 
   // ===== Pacientes =====
@@ -483,7 +597,7 @@ function subscribeBroadcast(){
       selectedDoctor = null;
       saveSelectedDoctor();
       renderPatients([]);
-      subscribeBroadcast();
+      subscribeToAllDoctorBroadcasts()
       return;
     }
     show(noDoctorsNoteEl, false);
@@ -504,7 +618,7 @@ function subscribeBroadcast(){
           saveSelectedDoctor();
           renderDoctors();
           subscribePatientsForSelected();
-          subscribeBroadcast();
+          subscribeToAllDoctorBroadcasts();
         };
 
         var nm = document.createElement('span');
@@ -525,7 +639,7 @@ function subscribeBroadcast(){
       saveSelectedDoctor();
     }
     subscribePatientsForSelected();
-    subscribeBroadcast();
+    subscribeToAllDoctorBroadcasts();
   }
 
   // Upload se houver arquivo
