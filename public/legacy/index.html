@@ -56,7 +56,7 @@
         .broadcast {
           color: #fff;
           background: #ef4444; /* vermelho */
-          padding: 12px 16px; /* REDUZIDO de 16px 20px */
+          padding: 12px 16px;
           font-weight: 800;
           text-transform: uppercase;
           letter-spacing: .5px;
@@ -73,12 +73,35 @@
           align-items:center; 
           justify-content:space-between; 
           gap:10px; 
-          font-size: 10px; /* REDUZIDO de 11px */
-          font-weight: 500;
+          font-size: 12px; /* AUMENTADO de 10px para 12px */
+          font-weight: 600; /* AUMENTADO de 500 para 600 */
           text-transform: none;
           letter-spacing: 0;
-          opacity: 0.85;
-          margin-bottom: 8px; /* REDUZIDO de 12px */
+          margin-bottom: 8px;
+        }
+        
+        .broadcast .info-row {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          flex: 1;
+        }
+        
+        .broadcast-badge {
+          background: rgba(0,0,0,0.3);
+          color: #fff;
+          padding: 4px 8px;
+          border-radius: 4px;
+          font-size: 10px;
+          font-weight: 700;
+          text-transform: uppercase;
+          white-space: nowrap;
+        }
+        
+        .broadcast .emitter-info {
+          font-size: 12px; /* AUMENTADO */
+          font-weight: 600; /* AUMENTADO */
+          opacity: 0.95; /* AUMENTADO de 0.85 */
         }
         
         .broadcast .content-row {
@@ -90,7 +113,7 @@
         
         .broadcast .patient-name {
           display: block;
-          font-size: 28px; /* REDUZIDO de 32px */
+          font-size: 28px;
           font-weight: 900;
           text-transform: uppercase;
           letter-spacing: 1px;
@@ -102,7 +125,7 @@
         
         .broadcast .msg { 
           display:block; 
-          font-size: 20px; /* REDUZIDO de 24px */
+          font-size: 20px;
           font-weight: 700;
           text-transform: none;
           letter-spacing: 0.5px;
@@ -116,9 +139,9 @@
           color:#b91c1c; 
           border:1px solid #fecaca; 
           font-weight:700; 
-          padding:5px 10px; /* REDUZIDO de 6px 12px */
+          padding:5px 10px;
           border-radius:8px;
-          font-size: 10px; /* REDUZIDO de 11px */
+          font-size: 10px;
           text-transform: uppercase;
           cursor: pointer;
           transition: all 0.2s;
@@ -130,25 +153,12 @@
           transform: scale(1.05);
         }
         
-        .broadcast-badge {
-          position: absolute;
-          top: 8px; /* REDUZIDO de 12px */
-          left: 10px; /* REDUZIDO de 12px */
-          background: rgba(0,0,0,0.3);
-          color: #fff;
-          padding: 3px 6px; /* REDUZIDO de 4px 8px */
-          border-radius: 4px;
-          font-size: 9px; /* REDUZIDO de 10px */
-          font-weight: 700;
-          text-transform: uppercase;
-        }
-        
         .no-broadcasts {
           display: none;
           color: #6b7280;
-          font-size: 13px; /* REDUZIDO de 14px */
+          font-size: 13px;
           text-align: center;
-          padding: 16px; /* REDUZIDO de 20px */
+          padding: 16px;
         }
     
     /* Botão som */
@@ -372,17 +382,25 @@ function createBroadcastElement(docId, data) {
   wrapper.className = 'broadcast pulse';
   wrapper.id = 'broadcast_' + docId;
   
+  var topline = document.createElement('div');
+  topline.className = 'topline';
+  
+  // Container para badge + info do emissor (lado a lado)
+  var infoRow = document.createElement('div');
+  infoRow.className = 'info-row';
+  
   var badge = document.createElement('div');
   badge.className = 'broadcast-badge';
   badge.textContent = 'Doc: ' + docId;
   
-  var topline = document.createElement('div');
-  topline.className = 'topline';
-  
-  var meta = document.createElement('div');
+  var emitterInfo = document.createElement('div');
+  emitterInfo.className = 'emitter-info';
   var emitterName = (data.emittedByName && String(data.emittedByName)) || '—';
   var emitterDoc = (data.emittedByDocId && String(data.emittedByDocId)) || docId;
-  meta.textContent = 'Alerta de: ' + emitterName + ' (' + emitterDoc + ')';
+  emitterInfo.textContent = 'Alerta de: ' + emitterName + ' (' + emitterDoc + ')';
+  
+  infoRow.appendChild(badge);
+  infoRow.appendChild(emitterInfo);
   
   var btnOff = document.createElement('button');
   btnOff.className = 'mini';
@@ -392,10 +410,10 @@ function createBroadcastElement(docId, data) {
     deactivateBroadcast(docId);
   };
   
-  topline.appendChild(meta);
+  topline.appendChild(infoRow);
   topline.appendChild(btnOff);
   
-  // NOVA estrutura: nome e mensagem lado a lado
+  // Estrutura: nome e mensagem lado a lado
   var contentRow = document.createElement('div');
   contentRow.className = 'content-row';
   
@@ -410,9 +428,8 @@ function createBroadcastElement(docId, data) {
   contentRow.appendChild(patientName);
   contentRow.appendChild(msg);
   
-  wrapper.appendChild(badge);
   wrapper.appendChild(topline);
-  wrapper.appendChild(contentRow); // <- MUDOU AQUI
+  wrapper.appendChild(contentRow);
   
   return wrapper;
 }
