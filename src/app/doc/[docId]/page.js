@@ -388,13 +388,32 @@ export default function DocumentPage() {
     if (!documentData) return;
     const { rightEye, leftEye, addition } = documentData;
 
-    // Copia EXATAMENTE os valores como estão nos campos, sem modificação
-    // Se o valor for undefined/null, usa o valor inicial padrão
-    const odEsf = rightEye?.esf ?? '0.00';
+    // Função para garantir que valores positivos mantenham o sinal +
+    const formatWithSign = (value) => {
+      if (!value && value !== 0) return '0.00';
+      const str = String(value).trim();
+      const num = parseFloat(str);
+      
+      if (isNaN(num)) return '0.00';
+      
+      // Se for positivo, garante o sinal +
+      if (num > 0) {
+        return `+${num.toFixed(2)}`;
+      }
+      // Se for negativo, já tem o sinal
+      if (num < 0) {
+        return num.toFixed(2);
+      }
+      // Zero
+      return '0.00';
+    };
+
+    // Formata ESF com sinal, CIL e Eixo mantém como estão
+    const odEsf = formatWithSign(rightEye?.esf ?? '0.00');
     const odCil = rightEye?.cil ?? '0.00';
     const odEixo = rightEye?.eixo ?? '0';
     
-    const oeEsf = leftEye?.esf ?? '0.00';
+    const oeEsf = formatWithSign(leftEye?.esf ?? '0.00');
     const oeCil = leftEye?.cil ?? '0.00';
     const oeEixo = leftEye?.eixo ?? '0';
 
@@ -425,7 +444,17 @@ export default function DocumentPage() {
       '</tbody></table>'
     ].join('');
 
-    const tsv = rows.map(r => r.join('\t')).join('\n');
+    // TSV com apóstrofo para preservar sinal + no Excel
+    const tsv = rows.map(r => 
+      r.map(cell => {
+        const str = String(cell);
+        // Se começar com +, adiciona apóstrofo para forçar Excel a tratar como texto
+        if (str.startsWith('+')) {
+          return `'${str}`;
+        }
+        return str;
+      }).join('\t')
+    ).join('\n');
 
     try {
       const blobHtml = new Blob([html], { type: 'text/html' });
