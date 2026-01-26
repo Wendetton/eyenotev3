@@ -384,27 +384,31 @@ export default function DocumentPage() {
     }
   };
 
-  const formatEsfericoForCopy = (esfValue) => {
-    const n = parseFloat(esfValue);
-    if (isNaN(n)) return esfValue;
-    return n > 0 ? `+${esfValue}` : esfValue;
-  };
-
   const handleCopy = async () => {
     if (!documentData) return;
     const { rightEye, leftEye, addition } = documentData;
 
+    // Copia EXATAMENTE os valores como estão nos campos, sem modificação
+    // Se o valor for undefined/null, usa o valor inicial padrão
+    const odEsf = rightEye?.esf ?? '0.00';
+    const odCil = rightEye?.cil ?? '0.00';
+    const odEixo = rightEye?.eixo ?? '0';
+    
+    const oeEsf = leftEye?.esf ?? '0.00';
+    const oeCil = leftEye?.cil ?? '0.00';
+    const oeEixo = leftEye?.eixo ?? '0';
+
     let addTxt = '';
-    if (addition.active && addition.value) {
-      const v = addition.value.toString();
+    if (addition?.active && addition?.value) {
+      const v = String(addition.value);
       addTxt = v.startsWith('+') ? v : `+${v}`;
     }
 
     const rows = [
       ['', 'ESF', 'CIL', 'Eixo'],
-      ['Olho Direito', formatEsfericoForCopy(rightEye.esf), rightEye.cil, rightEye.eixo],
-      ['Olho Esquerdo', formatEsfericoForCopy(leftEye.esf), leftEye.cil, leftEye.eixo],
-      [addition.active ? 'Para perto' : '', addition.active ? `Adição ${addTxt} (AO)` : '', '', '']
+      ['Olho Direito', odEsf, odCil, odEixo],
+      ['Olho Esquerdo', oeEsf, oeCil, oeEixo],
+      [addition?.active ? 'Para perto' : '', addition?.active ? `Adição ${addTxt} (AO)` : '', '', '']
     ];
 
     const html = [
