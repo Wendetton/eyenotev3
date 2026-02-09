@@ -121,6 +121,7 @@ export default function DocumentPage() {
   const [documentData, setDocumentData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [copyStatus, setCopyStatus] = useState('');
+  const [refractionCopyStatus, setRefractionCopyStatus] = useState('');
   const [activeUsers, setActiveUsers] = useState([]);
 
   const [userId] = useState(() => Math.random().toString(36).slice(2));
@@ -471,6 +472,60 @@ export default function DocumentPage() {
       }
     }
     setTimeout(() => setCopyStatus(''), 3000);
+  };
+
+  const handleCopyRefraction = async () => {
+    if (!documentData) return;
+    const { rightEye, leftEye, addition } = documentData;
+
+    // Função para formatar valores: substitui ponto por vírgula, MANTÉM sinal +
+    const formatValue = (value) => {
+      if (!value && value !== 0) return '0,00';
+      const str = String(value).trim();
+      const num = parseFloat(str);
+      
+      if (isNaN(num)) return '0,00';
+      
+      // Formata com 2 casas decimais
+      const formatted = num.toFixed(2).replace('.', ',');
+      
+      // Se for positivo, adiciona o sinal +
+      if (num > 0) {
+        return `+${formatted}`;
+      }
+      
+      // Se negativo ou zero, retorna como está
+      return formatted;
+    };
+
+    // Formata valores (COM sinal + se positivo)
+    const odEsf = formatValue(rightEye?.esf ?? '0.00');
+    const odCil = formatValue(rightEye?.cil ?? '0.00');
+    const odEixo = rightEye?.eixo ?? '0';
+    
+    const oeEsf = formatValue(leftEye?.esf ?? '0.00');
+    const oeCil = formatValue(leftEye?.cil ?? '0.00');
+    const oeEixo = leftEye?.eixo ?? '0';
+
+    // Linha 1: OD
+    // Linha 2: OE
+    // Linha 3 (se adição ativa): AD + valor AO
+    let text = `${odEsf} ${odCil} ${odEixo}\n${oeEsf} ${oeCil} ${oeEixo}`;
+    
+    if (addition?.active && addition?.value) {
+      const addValue = String(addition.value).replace('.', ',');
+      const addSign = addValue.startsWith('+') || addValue.startsWith('-') ? '' : '+ ';
+      text += `\nAD ${addSign}${addValue} AO`;
+    }
+
+    try {
+      await navigator.clipboard.writeText(text);
+      setRefractionCopyStatus('Copiado!');
+    } catch (err) {
+      console.error('Erro ao copiar refração:', err);
+      setRefractionCopyStatus('Falha ao copiar.');
+    }
+    setTimeout(() => setRefractionCopyStatus(''), 3000);
   };
 
   /* --------- Seleção de perfil/paciente --------- */
@@ -1015,6 +1070,12 @@ const handleSendAlert = async ({ patientName, message }) => {
                   className="px-6 py-2 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded-md shadow-sm"
                 >
                   {copyStatus || 'Copiar para Tabela'}
+                </button>
+                <button
+                  onClick={handleCopyRefraction}
+                  className="px-6 py-2 bg-amber-500 hover:bg-amber-600 text-white font-semibold rounded-md shadow-sm"
+                >
+                  {refractionCopyStatus || 'Copiar Refração'}
                 </button>
                 <button
                   onClick={() => handleArchivePatient(selectedPatient.id)}
