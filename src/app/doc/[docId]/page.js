@@ -141,6 +141,8 @@ export default function DocumentPage() {
   // Enquanto estiver true, snapshots não sobrescrevem o que o usuário está digitando.
   const annotationsDirtyRef = useRef(false);
   const annotationsSeqRef = useRef(0);
+  // Último valor de anotações recebido do Firestore para o paciente atual (para ressincronizar)
+  const lastSnapAnnotationsRef = useRef(null);
 
   /* --------- Lista de pacientes (tempo real) --------- */
   useEffect(() => {
@@ -166,6 +168,7 @@ export default function DocumentPage() {
     // Troca de paciente: edições pendentes de anotação pertencem ao paciente anterior
     annotationsDirtyRef.current = false;
     annotationsSeqRef.current += 1;
+    lastSnapAnnotationsRef.current = null;
 
     if (!docId || !patientId) {
       setSelectedPatient(null);
@@ -184,6 +187,7 @@ export default function DocumentPage() {
         if (snap.exists()) {
           const p = snap.data();
           const snapAnnotations = typeof p.annotations === 'string' ? p.annotations : initialDocumentData.annotations;
+          lastSnapAnnotationsRef.current = snapAnnotations;
           setDocumentData((prev) => ({
             rightEye: p.rightEye || initialDocumentData.rightEye,
             leftEye:  p.leftEye  || initialDocumentData.leftEye,
@@ -350,7 +354,14 @@ export default function DocumentPage() {
       if (debounceTimeoutRef.current) clearTimeout(debounceTimeoutRef.current);
       debounceTimeoutRef.current = setTimeout(async () => {
         await updateDocInFirestore({ [path]: value }, pid);
-        if (annotationsSeqRef.current === seq) annotationsDirtyRef.current = false;
+        if (annotationsSeqRef.current === seq) {
+          annotationsDirtyRef.current = false;
+          // Ressincroniza: se outro aparelho gravou enquanto este digitava, mostra o valor do banco
+          const latest = lastSnapAnnotationsRef.current;
+          if (typeof latest === 'string' && currentPatientIdRef.current === pid) {
+            setDocumentData((prev) => (prev && prev.annotations !== latest ? { ...prev, annotations: latest } : prev));
+          }
+        }
       }, 400);
     } else {
       updateDocInFirestore({ [path]: value });
