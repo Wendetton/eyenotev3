@@ -233,10 +233,12 @@
             <div class="col">
               <label>AR (imagem)</label>
               <input type="file" id="arFile" accept="image/*" capture="environment">
+              <div id="arFileInfo" style="font-size:12px;color:#16a34a;margin-top:4px;"></div>
             </div>
             <div class="col">
               <label>Tonometria (imagem)</label>
               <input type="file" id="tonoFile" accept="image/*" capture="environment">
+              <div id="tonoFileInfo" style="font-size:12px;color:#16a34a;margin-top:4px;"></div>
             </div>
           </div>
 
@@ -291,6 +293,20 @@
   var patientNameInput = $('patientName');
   var arInput = $('arFile'), tonoInput = $('tonoFile');
   var btnCreate = $('btnCreate'), btnReset = $('btnReset');
+
+  // Cache dos arquivos selecionados (sobrevive caso o Chrome recicle a aba após abrir a câmera)
+  var arFileCached = null, tonoFileCached = null;
+  function fmtSize(b){ if(!b) return ''; if(b<1024) return b+' B'; if(b<1048576) return (b/1024).toFixed(1)+' KB'; return (b/1048576).toFixed(1)+' MB'; }
+  function bindFileInput(input, infoId, setter){
+    var info = document.getElementById(infoId);
+    input.addEventListener('change', function(){
+      var f = input.files && input.files[0] ? input.files[0] : null;
+      setter(f);
+      if (info) info.textContent = f ? ('✓ ' + (f.name || 'foto') + ' (' + fmtSize(f.size) + ')') : '';
+    });
+  }
+  bindFileInput(arInput,   'arFileInfo',   function(f){ arFileCached = f; });
+  bindFileInput(tonoInput, 'tonoFileInfo', function(f){ tonoFileCached = f; });
 
   var patientsBox = $('patientsBox');
 
@@ -732,11 +748,12 @@ function subscribeToAllDoctorBroadcasts() {
   };
 
   btnCreate.onclick = function(){
+   try {
     show(okEl, false); show(errEl, false);
     if (!selectedDoctor || !selectedDoctor.docId){ showErr('Selecione um médico.'); return; }
     var name  = clean(patientNameInput.value);
-    var arF   = arInput.files[0] || null;
-    var toF   = tonoInput.files[0] || null;
+    var arF   = arFileCached   || (arInput.files   && arInput.files[0])   || null;
+    var toF   = tonoFileCached || (tonoInput.files && tonoInput.files[0]) || null;
     if (!name){ showErr('Informe o nome do paciente.'); return; }
 
     setBusy(true);
@@ -760,14 +777,30 @@ function subscribeToAllDoctorBroadcasts() {
         if (Object.keys(exams).length > 0){ data.exams = exams; }
 
         firebase.firestore().collection('patients').doc(patientId).set(data, { merge: true })
-          .then(function(){ showOk('Paciente criado/enviado.'); patientNameInput.value=''; arInput.value=''; tonoInput.value=''; })
+          .then(function(){
+            showOk('Paciente criado/enviado.');
+            patientNameInput.value=''; arInput.value=''; tonoInput.value='';
+            arFileCached = null; tonoFileCached = null;
+            var ai=document.getElementById('arFileInfo'), ti=document.getElementById('tonoFileInfo');
+            if(ai) ai.textContent=''; if(ti) ti.textContent='';
+          })
           .catch(function(e){ showErr('Erro ao salvar paciente: ' + (e.message || e)); })
           .finally(function(){ setBusy(false); });
       });
     });
+   } catch(e){
+     setBusy(false);
+     showErr('Erro inesperado: ' + (e && (e.message || e)));
+   }
   };
 
-  btnReset.onclick = function(){ patientNameInput.value=''; arInput.value=''; tonoInput.value=''; show(okEl,false); show(errEl,false); };
+  btnReset.onclick = function(){
+    patientNameInput.value=''; arInput.value=''; tonoInput.value='';
+    arFileCached = null; tonoFileCached = null;
+    var ai=document.getElementById('arFileInfo'), ti=document.getElementById('tonoFileInfo');
+    if(ai) ai.textContent=''; if(ti) ti.textContent='';
+    show(okEl,false); show(errEl,false);
+  };
 
   // Boot
   loadJSON('/firebase-config.json', function(err, cfg){
