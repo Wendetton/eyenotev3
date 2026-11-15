@@ -22,7 +22,6 @@ import ExamViewer from '@/components/doctor/ExamViewer';
 import CallPatientBar from '@/components/doctor/CallPatientBar';
 import PatientCard from '@/components/patient/PatientCard';
 import ArchivedPatients from '@/components/common/ArchivedPatients';
-import AlertModal from '@/components/common/AlertModal';
 
 import {
   subscribeToDocumentPatients,
@@ -138,13 +137,6 @@ export default function DocumentPage() {
   const presenceRef = useRef(null);
   const presenceIntervalRef = useRef(null);
   const debounceTimeoutRef = useRef(null);
-
-  // --- Avisos (broadcasts) ---
-  const [showAlertModal, setShowAlertModal] = useState(false);
-  const [broadcastActive, setBroadcastActive] = useState(false);
-  const [broadcastPatientId, setBroadcastPatientId] = useState(null);
-  const [broadcastPatientName, setBroadcastPatientName] = useState(''); // <- para a lista do médico
-  const [broadcastMessage, setBroadcastMessage] = useState('');
 
   /* --------- Lista de pacientes (tempo real) --------- */
   useEffect(() => {
@@ -280,23 +272,6 @@ export default function DocumentPage() {
       currentPatientIdRef.current = null;
     };
   }, [docId, userId, userName, userColor, userProfile]);
-
-  /* --------- Listener do aviso (broadcasts/{docId}) --------- */
-  useEffect(() => {
-    if (!docId) return;
-    const ref = doc(db, 'broadcasts', docId);
-    const unsub = onSnapshot(ref, (snap) => {
-      const data = snap.exists() ? snap.data() : null;
-      const active = !!(data && data.active);
-      setBroadcastActive(active);
-      setBroadcastPatientId(data?.patientId || null);
-      setBroadcastPatientName(data?.patientName || ''); // <- nome p/ lista do médico
-      setBroadcastMessage(data?.message || '');
-    }, (err) => {
-      console.error('Erro no listener de broadcast:', err);
-    });
-    return () => unsub && unsub();
-  }, [docId]);
 
   /* --------- Escrita unificada (doc raiz x subdoc paciente) --------- */
   const updateDocInFirestore = async (updates) => {
@@ -609,53 +584,6 @@ export default function DocumentPage() {
     }
   };
 
-const handleSendAlert = async ({ patientName, message }) => {
-  try {
-    if (!docId) return;
-    if (!selectedPatient) {
-      alert('Nenhum paciente selecionado.');
-      return;
-    }
-    const color = '#ef4444'; // vermelho
-    
-    // CORREÇÃO: usar patientName do parâmetro (vem do modal)
-    const finalPatientName = (patientName || selectedPatient.name || '').trim();
-    
-    await setDoc(
-      doc(db, 'broadcasts', docId),
-      {
-        active: true,
-        message: (message || '').trim(),
-        color,
-        emittedByName: userName || 'Médico',
-        emittedByDocId: docId,
-        patientId: selectedPatient.id,
-        patientName: finalPatientName, // <- CORREÇÃO AQUI
-        updatedAt: serverTimestamp(),
-        startedAt: serverTimestamp()
-      },
-      { merge: true }
-    );
-  } catch (e) {
-    console.error('Erro ao enviar aviso:', e);
-    alert('Falha ao enviar aviso.');
-  }
-};
-
-  const handleFinishAlert = async () => {
-    try {
-      if (!docId) return;
-      await setDoc(
-        doc(db, 'broadcasts', docId),
-        { active: false, updatedAt: serverTimestamp(), endedAt: serverTimestamp() },
-        { merge: true }
-      );
-    } catch (e) {
-      console.error('Erro ao finalizar aviso:', e);
-      alert('Falha ao finalizar aviso.');
-    }
-  };
-
   const renderArchivedModal = () =>
     showArchivedPatients ? <ArchivedPatients documentId={docId} onClose={() => setShowArchivedPatients(false)} /> : null;
 
@@ -709,7 +637,7 @@ const handleSendAlert = async ({ patientName, message }) => {
                 <p className="text-sm text-gray-500">Usuário: <span style={{ color: userColor, fontWeight: 'bold' }}>{userName}</span></p>
               </div>
 
-              {/* Botões + indicador de aviso ativo/ausente */}
+              {/* Botões */}
               <div className="flex items-center gap-3">
                 <button
                   onClick={() => setShowArchivedPatients(true)}
@@ -726,20 +654,6 @@ const handleSendAlert = async ({ patientName, message }) => {
                   </svg>
                   Atendimento Rápido
                 </button>
-
-                <span
-                  className={
-                    "inline-flex items-center px-3 py-2 rounded-full text-sm font-semibold " +
-                    (broadcastActive ? "bg-red-100 text-red-800" : "bg-gray-100 text-gray-600")
-                  }
-                  title={broadcastActive ? (broadcastMessage || '') : 'Nenhum aviso ativo'}
-                >
-                  {broadcastActive ? (
-                    <>Aviso&nbsp;<span className="font-bold">{broadcastPatientName || 'Paciente'}</span>&nbsp;ativo</>
-                  ) : (
-                    'Sem avisos ativos'
-                  )}
-                </span>
               </div>
             </div>
 
@@ -783,36 +697,9 @@ const handleSendAlert = async ({ patientName, message }) => {
               </div>
             </div>
 
-            {/* lado direito do cabeçalho: Chamador + Avisos (alinhados por py-2) */}
+            {/* lado direito do cabeçalho: Chamador */}
             <div className="flex items-center gap-2">
               <CallPatientBar patient={selectedPatient} compact />
-
-              <button
-                type="button"
-                onClick={() => setShowAlertModal(true)}
-                title="Emitir aviso para o Legacy"
-                className="inline-flex items-center px-3 py-2 rounded-md bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold"
-              >
-                Aviso
-              </button>
-
-              {broadcastActive && (
-                <>
-                  <span
-                    className="inline-flex items-center px-3 py-2 rounded-full text-xs font-semibold bg-red-100 text-red-800 leading-none"
-                  >
-                    Aviso ativo
-                  </span>
-                  <button
-                    type="button"
-                    onClick={handleFinishAlert}
-                    title="Finalizar aviso"
-                    className="inline-flex items-center py-2 text-red-700 hover:text-red-900 text-sm underline"
-                  >
-                    Finalizar
-                  </button>
-                </>
-              )}
             </div>
           </div>
         </header>
@@ -956,13 +843,6 @@ const handleSendAlert = async ({ patientName, message }) => {
           As alterações são salvas automaticamente.
         </footer>
 
-        {/* Modal de Aviso */}
-        <AlertModal
-          isOpen={showAlertModal}
-          onClose={() => setShowAlertModal(false)}
-          defaultPatientName={selectedPatient?.name || ''}
-          onSend={handleSendAlert}
-        />
       </div>
     );
   }
