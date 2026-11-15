@@ -137,6 +137,10 @@ export default function DocumentPage() {
   const presenceRef = useRef(null);
   const presenceIntervalRef = useRef(null);
   const debounceTimeoutRef = useRef(null);
+  // Anotações: true enquanto há texto digitado que ainda não foi confirmado pelo Firestore.
+  // Enquanto estiver true, snapshots não sobrescrevem o que o usuário está digitando.
+  const annotationsDirtyRef = useRef(false);
+  const annotationsSeqRef = useRef(0);
 
   /* --------- Lista de pacientes (tempo real) --------- */
   useEffect(() => {
@@ -159,6 +163,10 @@ export default function DocumentPage() {
     if (currentPatientUnsubRef.current) { currentPatientUnsubRef.current(); currentPatientUnsubRef.current = null; }
     currentPatientIdRef.current = patientId || null;
 
+    // Troca de paciente: edições pendentes de anotação pertencem ao paciente anterior
+    annotationsDirtyRef.current = false;
+    annotationsSeqRef.current += 1;
+
     if (!docId || !patientId) {
       setSelectedPatient(null);
       setDocumentData(initialDocumentData);
@@ -166,6 +174,8 @@ export default function DocumentPage() {
     }
 
     setSelectedPatient({ id: patientId, name: patientName });
+    // Não deixa os dados do paciente anterior na tela enquanto o novo carrega
+    setDocumentData(initialDocumentData);
 
     const patientDocRef = doc(db, 'documents', docId, 'patients', patientId);
     const unsub = onSnapshot(
@@ -173,14 +183,22 @@ export default function DocumentPage() {
       (snap) => {
         if (snap.exists()) {
           const p = snap.data();
-          setDocumentData({
+          const snapAnnotations = typeof p.annotations === 'string' ? p.annotations : initialDocumentData.annotations;
+          setDocumentData((prev) => ({
             rightEye: p.rightEye || initialDocumentData.rightEye,
             leftEye:  p.leftEye  || initialDocumentData.leftEye,
             addition: p.addition || initialDocumentData.addition,
-            annotations: typeof p.annotations === 'string' ? p.annotations : initialDocumentData.annotations
-          });
+            // Se o usuário está digitando, mantém o texto local em vez do valor (mais antigo) do snapshot
+            annotations: (annotationsDirtyRef.current && prev && typeof prev.annotations === 'string')
+              ? prev.annotations
+              : snapAnnotations
+          }));
         } else {
-          setDocumentData(initialDocumentData);
+          setDocumentData((prev) =>
+            (annotationsDirtyRef.current && prev && typeof prev.annotations === 'string')
+              ? { ...initialDocumentData, annotations: prev.annotations }
+              : initialDocumentData
+          );
         }
       },
       (err) => console.error('Erro no listener do paciente:', err)
@@ -274,7 +292,8 @@ export default function DocumentPage() {
   }, [docId, userId, userName, userColor, userProfile]);
 
   /* --------- Escrita unificada (doc raiz x subdoc paciente) --------- */
-  const updateDocInFirestore = async (updates) => {
+  // targetPid: paciente de destino fixado no momento da edição (usado pelo debounce das anotações)
+  const updateDocInFirestore = async (updates, targetPid) => {
     if (!docId) return;
 
     const keys = Object.keys(updates || {});
@@ -285,7 +304,7 @@ export default function DocumentPage() {
       k === 'annotations'
     );
 
-    const pid = currentPatientIdRef.current;
+    const pid = targetPid !== undefined ? targetPid : currentPatientIdRef.current;
 
     if (isPatientField && pid) {
       const patientDocRef = doc(db, 'documents', docId, 'patients', pid);
@@ -324,9 +343,14 @@ export default function DocumentPage() {
     });
 
     if (path === 'annotations') {
+      // Fixa o paciente e marca as anotações como "em edição" até o Firestore confirmar a gravação
+      const pid = currentPatientIdRef.current;
+      const seq = ++annotationsSeqRef.current;
+      annotationsDirtyRef.current = true;
       if (debounceTimeoutRef.current) clearTimeout(debounceTimeoutRef.current);
-      debounceTimeoutRef.current = setTimeout(() => {
-        updateDocInFirestore({ [path]: value });
+      debounceTimeoutRef.current = setTimeout(async () => {
+        await updateDocInFirestore({ [path]: value }, pid);
+        if (annotationsSeqRef.current === seq) annotationsDirtyRef.current = false;
       }, 400);
     } else {
       updateDocInFirestore({ [path]: value });
@@ -340,6 +364,10 @@ export default function DocumentPage() {
 
   const handleReset = async () => {
     const pid = currentPatientIdRef.current;
+    // Cancela anotação ainda não gravada, para ela não voltar depois do reset
+    if (debounceTimeoutRef.current) { clearTimeout(debounceTimeoutRef.current); debounceTimeoutRef.current = null; }
+    annotationsDirtyRef.current = false;
+    annotationsSeqRef.current += 1;
     try {
       if (pid) {
         await updateDocInFirestore({
@@ -835,7 +863,8 @@ export default function DocumentPage() {
 
           {/* Sidebar - Exames do Paciente */}
           <aside className="w-full lg:w-[38%] bg-white rounded-lg shadow-md lg:sticky lg:top-6 self-start">
-            <ExamViewer patient={selectedPatient} />
+            {/* key: recria o visualizador a cada paciente, sem reaproveitar imagens do anterior */}
+            <ExamViewer key={selectedPatient.id} patient={selectedPatient} />
           </aside>
         </div>
 
