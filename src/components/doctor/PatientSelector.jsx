@@ -76,7 +76,7 @@ export default function PatientSelector({ documentId, selectedPatient, onPatient
               <div className="text-gray-500">
                 <div className="text-2xl mb-2">👥</div>
                 <p>Nenhum paciente ativo</p>
-                <p className="text-sm">Aguardando criação de pacientes pelo assistente</p>
+                <p className="text-sm">Aguardando o envio de pacientes</p>
               </div>
             )}
           </div>

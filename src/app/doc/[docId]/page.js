@@ -17,14 +17,11 @@ import {
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 
-import ProfileSelector from '@/components/common/ProfileSelector';
 import PatientSelector from '@/components/doctor/PatientSelector';
-import PatientCreationForm from '@/components/assistant/PatientCreationForm';
 import ExamViewer from '@/components/doctor/ExamViewer';
 import CallPatientBar from '@/components/doctor/CallPatientBar';
 import PatientCard from '@/components/patient/PatientCard';
 import ArchivedPatients from '@/components/common/ArchivedPatients';
-import AlertModal from '@/components/common/AlertModal';
 
 import {
   subscribeToDocumentPatients,
@@ -127,10 +124,11 @@ export default function DocumentPage() {
   const [userId] = useState(() => Math.random().toString(36).slice(2));
   const [userName, setUserName] = useState('');
   const [userColor, setUserColor] = useState('');
-  const [userProfile, setUserProfile] = useState(null); // 'doctor' | 'assistant'
+  // Perfil único: o modo Assistente foi desativado (os exames chegam pelo Painel Oftalmocenter).
+  // Mantido como 'doctor' para preservar os campos selectedPatientId_doctor no Firestore.
+  const userProfile = 'doctor';
   const [selectedPatient, setSelectedPatient] = useState(null);
   const [patients, setPatients] = useState([]);
-  const [showPatientForm, setShowPatientForm] = useState(false);
   const [showArchivedPatients, setShowArchivedPatients] = useState(false);
 
   // --- refs estáveis ---
@@ -139,13 +137,6 @@ export default function DocumentPage() {
   const presenceRef = useRef(null);
   const presenceIntervalRef = useRef(null);
   const debounceTimeoutRef = useRef(null);
-
-  // --- Avisos (broadcasts) ---
-  const [showAlertModal, setShowAlertModal] = useState(false);
-  const [broadcastActive, setBroadcastActive] = useState(false);
-  const [broadcastPatientId, setBroadcastPatientId] = useState(null);
-  const [broadcastPatientName, setBroadcastPatientName] = useState(''); // <- para a lista do médico
-  const [broadcastMessage, setBroadcastMessage] = useState('');
 
   /* --------- Lista de pacientes (tempo real) --------- */
   useEffect(() => {
@@ -281,23 +272,6 @@ export default function DocumentPage() {
       currentPatientIdRef.current = null;
     };
   }, [docId, userId, userName, userColor, userProfile]);
-
-  /* --------- Listener do aviso (broadcasts/{docId}) --------- */
-  useEffect(() => {
-    if (!docId) return;
-    const ref = doc(db, 'broadcasts', docId);
-    const unsub = onSnapshot(ref, (snap) => {
-      const data = snap.exists() ? snap.data() : null;
-      const active = !!(data && data.active);
-      setBroadcastActive(active);
-      setBroadcastPatientId(data?.patientId || null);
-      setBroadcastPatientName(data?.patientName || ''); // <- nome p/ lista do médico
-      setBroadcastMessage(data?.message || '');
-    }, (err) => {
-      console.error('Erro no listener de broadcast:', err);
-    });
-    return () => unsub && unsub();
-  }, [docId]);
 
   /* --------- Escrita unificada (doc raiz x subdoc paciente) --------- */
   const updateDocInFirestore = async (updates) => {
@@ -528,9 +502,7 @@ export default function DocumentPage() {
     setTimeout(() => setRefractionCopyStatus(''), 3000);
   };
 
-  /* --------- Seleção de perfil/paciente --------- */
-  const handleProfileSelect = (profile) => setUserProfile(profile);
-
+  /* --------- Seleção de paciente --------- */
   const handlePatientSelect = async (patient) => {
     attachPatientListenerById(patient?.id || null, patient?.name || 'Paciente Selecionado');
 
@@ -567,14 +539,6 @@ export default function DocumentPage() {
       console.error('Erro ao limpar seleção de paciente:', e);
     }
   };
-
-  const handleBackToProfile = () => {
-    attachPatientListenerById(null);
-    setUserProfile(null);
-    setShowPatientForm(false);
-  };
-
-  const handlePatientCreated = () => setShowPatientForm(false);
 
   const handleArchivePatient = async (patientId) => {
     try {
@@ -620,53 +584,6 @@ export default function DocumentPage() {
     }
   };
 
-const handleSendAlert = async ({ patientName, message }) => {
-  try {
-    if (!docId) return;
-    if (!selectedPatient) {
-      alert('Nenhum paciente selecionado.');
-      return;
-    }
-    const color = '#ef4444'; // vermelho
-    
-    // CORREÇÃO: usar patientName do parâmetro (vem do modal)
-    const finalPatientName = (patientName || selectedPatient.name || '').trim();
-    
-    await setDoc(
-      doc(db, 'broadcasts', docId),
-      {
-        active: true,
-        message: (message || '').trim(),
-        color,
-        emittedByName: userName || 'Médico',
-        emittedByDocId: docId,
-        patientId: selectedPatient.id,
-        patientName: finalPatientName, // <- CORREÇÃO AQUI
-        updatedAt: serverTimestamp(),
-        startedAt: serverTimestamp()
-      },
-      { merge: true }
-    );
-  } catch (e) {
-    console.error('Erro ao enviar aviso:', e);
-    alert('Falha ao enviar aviso.');
-  }
-};
-
-  const handleFinishAlert = async () => {
-    try {
-      if (!docId) return;
-      await setDoc(
-        doc(db, 'broadcasts', docId),
-        { active: false, updatedAt: serverTimestamp(), endedAt: serverTimestamp() },
-        { merge: true }
-      );
-    } catch (e) {
-      console.error('Erro ao finalizar aviso:', e);
-      alert('Falha ao finalizar aviso.');
-    }
-  };
-
   const renderArchivedModal = () =>
     showArchivedPatients ? <ArchivedPatients documentId={docId} onClose={() => setShowArchivedPatients(false)} /> : null;
 
@@ -701,166 +618,6 @@ const handleSendAlert = async ({ patientName, message }) => {
     );
   }
 
-  // Seleção de perfil
-  if (!userProfile) {
-    return (
-      <>
-        <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
-          <div className="container mx-auto p-4">
-            <div className="text-center mb-8 pt-8">
-              <h1 className="text-4xl font-bold mb-2 text-gray-800">Eyenote</h1>
-              <p className="text-gray-600">Documento: {docId}</p>
-              <p className="text-sm text-gray-500 mt-2">
-                Usuário: <span style={{ color: userColor, fontWeight: 'bold' }}>{userName}</span>
-              </p>
-            </div>
-            <ProfileSelector onProfileSelect={handleProfileSelect} documentId={docId} userName={userName} userColor={userColor} />
-          </div>
-        </div>
-        {renderArchivedModal()}
-      </>
-    );
-  }
-
-  /* ----------------- ASSISTENTE ----------------- */
-  if (userProfile === 'assistant') {
-    // Form de criação
-    if (showPatientForm) {
-      return (
-        <div className="min-h-screen bg-gradient-to-br from-green-50 to-emerald-100">
-          <div className="container mx-auto p-4">
-            <div className="flex items-center justify-between mb-6">
-              <button onClick={() => setShowPatientForm(false)} className="flex items-center text-gray-600 hover:text-gray-800">
-                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
-                Voltar
-              </button>
-              <div className="text-center">
-                <h1 className="text-2xl font-bold text-gray-800">Criar Paciente</h1>
-                <p className="text-sm text-gray-600">Documento: {docId}</p>
-              </div>
-              <div />
-            </div>
-            <PatientCreationForm documentId={docId} onPatientCreated={() => setShowPatientForm(false)} />
-          </div>
-          {renderArchivedModal()}
-        </div>
-      );
-    }
-
-    // Sem paciente selecionado
-    if (!selectedPatient) {
-      return (
-        <div className="min-h-screen bg-gradient-to-br from-green-50 to-emerald-100">
-          <div className="container mx-auto p-4">
-            <div className="flex items-center justify-between mb-6">
-              <button onClick={handleBackToProfile} className="flex items-center text-gray-600 hover:text-gray-800">
-                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
-                Trocar Perfil
-              </button>
-              <div className="text-center">
-                <h1 className="text-3xl font-bold text-gray-800">Assistente</h1>
-                <p className="text-gray-600">Documento: {docId}</p>
-                <p className="text-sm text-gray-500">
-                  Usuário: <span style={{ color: userColor, fontWeight: 'bold' }}>{userName}</span>
-                </p>
-              </div>
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={() => setShowArchivedPatients(true)}
-                  className="bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-2 rounded-md text-sm font-medium"
-                >
-                  Ver Arquivados
-                </button>
-                <button
-                  onClick={() => setShowPatientForm(true)}
-                  className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md font-medium"
-                >
-                  Criar Paciente
-                </button>
-              </div>
-            </div>
-
-            <PatientSelector
-              documentId={docId}
-              selectedPatient={selectedPatient}
-              onPatientSelect={handlePatientSelect}
-              onArchive={handleArchivePatient}
-            />
-
-            {/* Usuários Ativos */}
-            <div className="mt-6 bg-white rounded-lg shadow-lg p-6">
-              <h2 className="text-lg font-semibold mb-3 text-gray-700">Usuários Ativos ({activeUsers.length})</h2>
-              <div className="flex flex-wrap gap-2">
-                {activeUsers.map(u => (
-                  <div key={u.id} className="flex items-center bg-gray-100 rounded-full px-3 py-1">
-                    <span className="w-3 h-3 rounded-full mr-2" style={{ backgroundColor: u.color || 'gray' }}></span>
-                    <span className="text-sm font-medium" style={{ color: u.color || 'black' }}>{u.name}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-          {renderArchivedModal()}
-        </div>
-      );
-    }
-
-    // Com paciente selecionado — Assistente pode substituir a imagem (canEdit)
-    return (
-      <div className="container mx-auto p-4 flex flex-col min-h-screen bg-emerald-50">
-        <header className="mb-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <button
-                onClick={handleBackToPatients}
-                className="text-gray-500 hover:text-gray-700 transition-colors"
-                title="Voltar para lista de pacientes"
-              >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                </svg>
-              </button>
-              <div>
-                <h1 className="text-3xl font-bold text-gray-800">Assistente</h1>
-                <p className="text-sm text-gray-600">
-                  Paciente: <span className="font-semibold">{selectedPatient.name}</span> | Documento: {docId} |{' '}
-                  Visualizando como: <span style={{ color: userColor, fontWeight: 'bold' }}>{userName}</span>
-                </p>
-              </div>
-            </div>
-          </div>
-        </header>
-
-        <div className="flex flex-grow flex-col lg:flex-row gap-6">
-          <main className="flex-grow">
-            <div className="bg-white rounded-lg shadow-lg p-6 border-t-4 border-emerald-500">
-              <h2 className="text-xl font-semibold mb-4 text-gray-700">Exames do Paciente</h2>
-              <ExamViewer patient={selectedPatient} canEdit={true} />
-              <p className="text-sm text-gray-500 mt-3">Atualizações são em tempo real para todos.</p>
-            </div>
-          </main>
-
-          <aside className="w-full lg:w-[38%] bg-white rounded-lg shadow-md lg:sticky lg:top-6 self-start">
-            <div className="p-6">
-              <h3 className="text-lg font-semibold text-gray-700 mb-2">Ações rápidas</h3>
-              <button
-                onClick={() => setShowArchivedPatients(true)}
-                className="bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded-md text-sm font-medium"
-              >
-                Ver Pacientes Arquivados
-              </button>
-            </div>
-          </aside>
-        </div>
-
-        <footer className="mt-8 text-center text-sm text-gray-500 py-4 border-t border-gray-200">
-          Alterações de exames são salvas automaticamente.
-        </footer>
-        {renderArchivedModal()}
-      </div>
-    );
-  }
-
   /* ----------------- MÉDICO ----------------- */
   if (userProfile === 'doctor') {
     if (!selectedPatient) {
@@ -868,11 +625,11 @@ const handleSendAlert = async ({ patientName, message }) => {
         <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
           <div className="container mx-auto p-4">
             <div className="flex items-center justify-between mb-6">
-              <button onClick={handleBackToProfile} className="flex items-center text-gray-600 hover:text-gray-800">
+              <button onClick={() => router.push('/')} className="flex items-center text-gray-600 hover:text-gray-800">
                 <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
                 </svg>
-                Trocar Perfil
+                Início
               </button>
               <div className="text-center">
                 <h1 className="text-3xl font-bold text-gray-800">Médico</h1>
@@ -880,7 +637,7 @@ const handleSendAlert = async ({ patientName, message }) => {
                 <p className="text-sm text-gray-500">Usuário: <span style={{ color: userColor, fontWeight: 'bold' }}>{userName}</span></p>
               </div>
 
-              {/* Botões + indicador de aviso ativo/ausente */}
+              {/* Botões */}
               <div className="flex items-center gap-3">
                 <button
                   onClick={() => setShowArchivedPatients(true)}
@@ -897,20 +654,6 @@ const handleSendAlert = async ({ patientName, message }) => {
                   </svg>
                   Atendimento Rápido
                 </button>
-
-                <span
-                  className={
-                    "inline-flex items-center px-3 py-2 rounded-full text-sm font-semibold " +
-                    (broadcastActive ? "bg-red-100 text-red-800" : "bg-gray-100 text-gray-600")
-                  }
-                  title={broadcastActive ? (broadcastMessage || '') : 'Nenhum aviso ativo'}
-                >
-                  {broadcastActive ? (
-                    <>Aviso&nbsp;<span className="font-bold">{broadcastPatientName || 'Paciente'}</span>&nbsp;ativo</>
-                  ) : (
-                    'Sem avisos ativos'
-                  )}
-                </span>
               </div>
             </div>
 
@@ -954,36 +697,9 @@ const handleSendAlert = async ({ patientName, message }) => {
               </div>
             </div>
 
-            {/* lado direito do cabeçalho: Chamador + Avisos (alinhados por py-2) */}
+            {/* lado direito do cabeçalho: Chamador */}
             <div className="flex items-center gap-2">
               <CallPatientBar patient={selectedPatient} compact />
-
-              <button
-                type="button"
-                onClick={() => setShowAlertModal(true)}
-                title="Emitir aviso para o Legacy"
-                className="inline-flex items-center px-3 py-2 rounded-md bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold"
-              >
-                Aviso
-              </button>
-
-              {broadcastActive && (
-                <>
-                  <span
-                    className="inline-flex items-center px-3 py-2 rounded-full text-xs font-semibold bg-red-100 text-red-800 leading-none"
-                  >
-                    Aviso ativo
-                  </span>
-                  <button
-                    type="button"
-                    onClick={handleFinishAlert}
-                    title="Finalizar aviso"
-                    className="inline-flex items-center py-2 text-red-700 hover:text-red-900 text-sm underline"
-                  >
-                    Finalizar
-                  </button>
-                </>
-              )}
             </div>
           </div>
         </header>
@@ -1127,13 +843,6 @@ const handleSendAlert = async ({ patientName, message }) => {
           As alterações são salvas automaticamente.
         </footer>
 
-        {/* Modal de Aviso */}
-        <AlertModal
-          isOpen={showAlertModal}
-          onClose={() => setShowAlertModal(false)}
-          defaultPatientName={selectedPatient?.name || ''}
-          onSend={handleSendAlert}
-        />
       </div>
     );
   }
