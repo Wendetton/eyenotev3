@@ -30,6 +30,7 @@ import {
 } from '@/utils/patientUtils';
 
 import { generatePrescriptionPDF } from '@/utils/pdfGenerator';
+import { formatPastedRefraction } from '@/utils/refractionPaste';
 
 /* ------------------------- util ------------------------- */
 const getRandomColor = () => {
@@ -366,6 +367,30 @@ export default function DocumentPage() {
     } else {
       updateDocInFirestore({ [path]: value });
     }
+  };
+
+  // Colar nas anotações: se o texto colado for uma tabela de grau (copiada do prontuário),
+  // entra já organizado em linhas compactas (OD / OE / Ad). Qualquer outro texto cola normalmente.
+  const handleAnnotationsPaste = (e) => {
+    const pasted = e.clipboardData?.getData('text/plain');
+    const formatted = formatPastedRefraction(pasted);
+    if (formatted === null) return; // colagem normal do navegador
+
+    e.preventDefault();
+    const el = e.target;
+    const current = el.value || '';
+    const start = el.selectionStart ?? current.length;
+    const end = el.selectionEnd ?? current.length;
+    const before = current.slice(0, start);
+    const after = current.slice(end);
+    const prefix = before && !before.endsWith('\n') ? '\n' : '';
+    const suffix = after && !after.startsWith('\n') ? '\n' : '';
+    const next = before + prefix + formatted + suffix + after;
+    updateField('annotations', next);
+
+    // reposiciona o cursor logo após o texto colado
+    const caret = (before + prefix + formatted).length;
+    requestAnimationFrame(() => { try { el.setSelectionRange(caret, caret); } catch {} });
   };
 
   const handleAdditionToggle = () => {
@@ -805,8 +830,9 @@ export default function DocumentPage() {
                 <textarea
                   value={documentData.annotations || ''}
                   onChange={(e) => updateField('annotations', e.target.value)}
+                  onPaste={handleAnnotationsPaste}
                   placeholder="Digite suas anotações aqui..."
-                  className="w-full h-32 p-3 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-sm text-black resize-none"
+                  className="w-full h-32 p-3 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-sm text-black resize-none tabular-nums"
                 />
               </div>
             </div>
