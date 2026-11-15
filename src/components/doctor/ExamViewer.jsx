@@ -12,7 +12,16 @@ import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage
  * - Dedup de snapshots e Sticky URL (sem “piscada”).
  * - Se canEdit === true, mostra barra para substituir a imagem do exame selecionado (AR/Tonometria).
  */
-export default function ExamViewer({ patient, canEdit = false }) {
+/**
+ * SEGURANÇA: cada paciente recebe uma instância própria do visualizador (key = id do paciente).
+ * Assim nenhuma imagem, URL "sticky" ou modal aberto de um paciente pode aparecer na ficha de outro,
+ * mesmo quando a troca de paciente chega sincronizada de outro aparelho sem passar pela lista.
+ */
+export default function ExamViewer(props) {
+  return <ExamViewerForPatient key={props.patient?.id || 'no-patient'} {...props} />;
+}
+
+function ExamViewerForPatient({ patient, canEdit = false }) {
   const [selectedExam, setSelectedExam] = useState('ar'); // 'ar' | 'tonometry'
   const [showModal, setShowModal] = useState(false);
   const [modalImage, setModalImage] = useState(null);
