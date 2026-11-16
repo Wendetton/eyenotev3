@@ -19,6 +19,8 @@ import { db } from '@/lib/firebase';
 
 import PatientSelector from '@/components/doctor/PatientSelector';
 import ExamViewer from '@/components/doctor/ExamViewer';
+// REFRATOR (experimental): seletor alternativo de grau. Para remover, apague esta linha e os outros trechos com esta marca.
+import RefractorEyeForm from '@/components/doctor/RefractorEyeForm';
 import CallPatientBar from '@/components/doctor/CallPatientBar';
 import PatientCard from '@/components/patient/PatientCard';
 import ArchivedPatients from '@/components/common/ArchivedPatients';
@@ -131,6 +133,20 @@ export default function DocumentPage() {
   const [selectedPatient, setSelectedPatient] = useState(null);
   const [patients, setPatients] = useState([]);
   const [showArchivedPatients, setShowArchivedPatients] = useState(false);
+
+  // REFRATOR (experimental): preferência por aparelho (não sincroniza), guardada no navegador.
+  const [refractorUI, setRefractorUI] = useState(false);
+  useEffect(() => {
+    try { setRefractorUI(localStorage.getItem('eyenote_refractor_ui') === '1'); } catch {}
+  }, []);
+  const toggleRefractorUI = () => {
+    setRefractorUI((on) => {
+      try { localStorage.setItem('eyenote_refractor_ui', on ? '0' : '1'); } catch {}
+      return !on;
+    });
+  };
+  const EyeFormComponent = refractorUI ? RefractorEyeForm : EyeForm;
+  // fim REFRATOR (experimental) — ao remover, troque <EyeFormComponent> por <EyeForm> abaixo.
 
   // --- refs estáveis ---
   const currentPatientIdRef = useRef(null);
@@ -771,14 +787,14 @@ export default function DocumentPage() {
         <div className="flex flex-grow flex-col lg:flex-row gap-6">
           <main className="flex-grow lg:w-[62%]">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <EyeForm
+              <EyeFormComponent
                 eyeLabel="Olho Direito (OD)"
                 eyeData={documentData.rightEye}
                 eyeKey="rightEye"
                 onFieldChange={updateField}
                 colorClass="border-blue-500"
               />
-              <EyeForm
+              <EyeFormComponent
                 eyeLabel="Olho Esquerdo (OE)"
                 eyeData={documentData.leftEye}
                 eyeKey="leftEye"
@@ -838,7 +854,24 @@ export default function DocumentPage() {
             </div>
 
             <div className="mt-6 bg-white p-6 rounded-lg shadow-lg border-t-4 border-gray-500">
-              <h2 className="text-xl font-semibold mb-4 text-gray-700">Controles</h2>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-semibold text-gray-700">Controles</h2>
+                {/* REFRATOR (experimental): chave para alternar o seletor de grau neste aparelho */}
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={refractorUI}
+                  onClick={toggleRefractorUI}
+                  className="flex items-center gap-2 text-sm font-medium text-gray-600"
+                  title="Alterna entre as listas e o seletor tipo refrator (vale só para este aparelho)"
+                >
+                  <span>Seletor tipo refrator</span>
+                  <span className={`relative inline-block w-11 h-6 rounded-full transition-colors ${refractorUI ? 'bg-indigo-600' : 'bg-gray-300'}`}>
+                    <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${refractorUI ? 'translate-x-5' : ''}`}></span>
+                  </span>
+                </button>
+                {/* fim REFRATOR (experimental) — ao remover, volte o <h2> a ter mb-4 e tire esta <div> */}
+              </div>
               <div className="flex flex-wrap gap-4">
                 <button
                   onClick={handleReset}
